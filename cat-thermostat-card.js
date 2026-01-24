@@ -122,7 +122,7 @@ class CATThermostatCard extends HTMLElement {
   }
 }
 
-// --- EDITOR ---
+// --- EDITOR WITH LABELS RESTORED ---
 class CATThermostatCardEditor extends HTMLElement {
   setConfig(config) { this._config = config || {}; }
   set hass(hass) { this._hass = hass; this._render(); }
@@ -131,17 +131,23 @@ class CATThermostatCardEditor extends HTMLElement {
     this._initialized = true;
     const climateEntities = Object.keys(this._hass.states).filter(e => e.startsWith('climate.'));
     this.innerHTML = `
-      <div style="display:flex; flex-direction:column; gap:10px; padding:10px; font-family:sans-serif; font-size:12px;">
-        <select id="entity-select" style="width:100%; padding:6px; background:#222; color:white; border:1px solid #444; border-radius:4px;">
-          <option value="">-- Entity --</option>
-          ${climateEntities.map(eid => `<option value="${eid}" ${this._config.entity === eid ? 'selected' : ''}>${this._hass.states[eid].attributes.friendly_name || eid}</option>`).join('')}
-        </select>
-        <input id="name-input" placeholder="Name" type="text" value="${this._config.name || ''}" style="width:100%; padding:6px; background:#222; color:white; border:1px solid #444; border-radius:4px;">
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
-          <input id="heat-start" type="color" title="Heat Start" value="${this._config.heat_start || '#fb923c'}">
-          <input id="heat-end" type="color" title="Heat End" value="${this._config.heat_end || '#f97316'}">
-          <input id="idle-start" type="color" title="Idle Start" value="${this._config.idle_start || '#374151'}">
-          <input id="idle-end" type="color" title="Idle End" value="${this._config.idle_end || '#111827'}">
+      <div style="display:flex; flex-direction:column; gap:12px; padding:10px; font-family:sans-serif; font-size:13px;">
+        <div>
+          <label style="display:block; margin-bottom:4px; font-weight:bold;">Radiator Entity</label>
+          <select id="entity-select" style="width:100%; padding:6px; background:#222; color:white; border:1px solid #444; border-radius:4px;">
+            <option value="">-- Select --</option>
+            ${climateEntities.map(eid => `<option value="${eid}" ${this._config.entity === eid ? 'selected' : ''}>${this._hass.states[eid].attributes.friendly_name || eid}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label style="display:block; margin-bottom:4px; font-weight:bold;">Name</label>
+          <input id="name-input" type="text" value="${this._config.name || ''}" style="width:100%; padding:6px; background:#222; color:white; border:1px solid #444; border-radius:4px;">
+        </div>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+          <div><label style="display:block; margin-bottom:4px; color:#fb923c;">Heat Start</label><input id="heat-start" type="color" value="${this._config.heat_start || '#fb923c'}" style="width:100%; height:30px; border:none; background:none;"></div>
+          <div><label style="display:block; margin-bottom:4px; color:#fb923c;">Heat End</label><input id="heat-end" type="color" value="${this._config.heat_end || '#f97316'}" style="width:100%; height:30px; border:none; background:none;"></div>
+          <div><label style="display:block; margin-bottom:4px; color:#9ca3af;">Idle Start</label><input id="idle-start" type="color" value="${this._config.idle_start || '#374151'}" style="width:100%; height:30px; border:none; background:none;"></div>
+          <div><label style="display:block; margin-bottom:4px; color:#9ca3af;">Idle End</label><input id="idle-end" type="color" value="${this._config.idle_end || '#111827'}" style="width:100%; height:30px; border:none; background:none;"></div>
         </div>
       </div>
     `;
@@ -163,6 +169,6 @@ window.customCards = window.customCards || [];
 window.customCards.push({
   type: 'cat-thermostat-card',
   name: 'CAT Radiator Card',
-  description: 'Single-row mobile optimized layout.',
+  description: 'Labels restored in visual editor.',
   preview: true,
 });
