@@ -43,7 +43,7 @@ class CATThermostatCard extends HTMLElement {
     this.shadowRoot.innerHTML = `
       <div style="padding: 24px; border: 2px dashed rgba(255,255,255,0.3); border-radius: 24px; text-align: center; background: #2c2c2c; color: white; font-family: system-ui;">
         <div style="font-size: 16px; font-weight: 600;">CAT Thermostat</div>
-        <div style="font-size: 12px; opacity: 0.6; margin-top: 4px;">Select a climate entity in the editor</div>
+        <div style="font-size: 12px; opacity: 0.6; margin-top: 4px;">Select your radiator in the editor dropdown</div>
       </div>
     `;
   }
@@ -152,35 +152,62 @@ class CATThermostatCardEditor extends HTMLElement {
   }
 
   _render() {
-    if (!this._config || !this._hass || this._initialized) return;
-    this._initialized = true;
+    if (!this._hass || !this._config) return;
 
-    // Use ha-form for the entity selector to ensure the dropdown list works
-    this.innerHTML = `
-      <div class="card-config" style="padding: 16px;">
-        <ha-form
-          .hass="${this._hass}"
-          .data="${this._config}"
-          .schema="${[
-            { name: "entity", selector: { entity: { domain: "climate" } } },
-            { name: "name", label: "Display Name", selector: { text: {} } },
-            { name: "color_start", label: "Gradient Start", selector: { color_rgb: {} } },
-            { name: "color_end", label: "Gradient End", selector: { color_rgb: {} } }
-          ]}"
-          .computeLabel="${(schema) => schema.label || schema.name}"
-        ></ha-form>
-      </div>
-    `;
+    // We only want to set the innerHTML once to avoid flickering and focus loss
+    if (!this._initialRender) {
+      this.innerHTML = `
+        <div class="card-config" style="display: flex; flex-direction: column; gap: 16px; padding: 10px;">
+          <div id="picker-container"></div>
+          <paper-input 
+            label="Custom Name (Optional)" 
+            .value="${this._config.name || ''}" 
+            config-value="name"
+          ></paper-input>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <ha-color-picker label="Start" .hass="${this._hass}" .value="${this._config.color_start || '#fb923c'}" config-value="color_start"></ha-color-picker>
+            <ha-color-picker label="End" .hass="${this._hass}" .value="${this._config.color_end || '#f97316'}" config-value="color_end"></ha-color-picker>
+          </div>
+        </div>
+      `;
+      this._initialRender = true;
+    }
 
-    this.querySelector("ha-form").addEventListener("value-changed", (ev) => {
-      const config = ev.detail.value;
-      const event = new CustomEvent("config-changed", {
-        detail: { config },
-        bubbles: true,
-        composed: true,
+    // Update or Create the Entity Picker dynamically
+    let picker = this.querySelector("ha-entity-picker");
+    if (!picker) {
+      picker = document.createElement("ha-entity-picker");
+      picker.setAttribute("label", "Radiator Entity");
+      picker.setAttribute("config-value", "entity");
+      picker.includeDomains = ["climate"];
+      this.querySelector("#picker-container").appendChild(picker);
+      
+      picker.addEventListener("value-changed", (ev) => this._valueChanged(ev));
+      this.querySelectorAll("paper-input, ha-color-picker").forEach(el => {
+         el.addEventListener("value-changed", (ev) => this._valueChanged(ev));
       });
-      this.dispatchEvent(event);
-    });
+    }
+
+    // Always keep the picker synced with the current state
+    picker.hass = this._hass;
+    picker.value = this._config.entity;
+  }
+
+  _valueChanged(ev) {
+    if (!this._config) return;
+    const target = ev.target;
+    const configValue = target.getAttribute("config-value");
+    const newValue = ev.detail.value;
+
+    if (this._config[configValue] === newValue) return;
+
+    const newConfig = { ...this._config, [configValue]: newValue };
+    
+    this.dispatchEvent(new CustomEvent("config-changed", {
+      detail: { config: newConfig },
+      bubbles: true,
+      composed: true,
+    }));
   }
 }
 
