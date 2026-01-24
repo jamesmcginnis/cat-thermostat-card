@@ -12,25 +12,24 @@ class CATThermostatCard extends HTMLElement {
   static getStubConfig() {
     return { 
       entity: '', 
-      name: 'Thermostat',
+      name: '',
       color_start: '#fb923c',
       color_end: '#f97316'
     };
   }
 
   setConfig(config) {
-    if (!config.entity) {
-      throw new Error('You need to define an entity');
-    }
+    // We store the config even if entity is missing so the editor can load
     this.config = config;
   }
 
   set hass(hass) {
-    const entityId = this.config.entity;
-    const entity = hass.states[entityId];
+    const entityId = this.config?.entity;
+    const entity = entityId ? hass.states[entityId] : null;
 
+    // If no entity is selected yet, show a placeholder for the UI
     if (!entity) {
-      this.shadowRoot.innerHTML = this._createErrorHTML(`Entity not found: ${entityId}`);
+      this._renderPlaceholder();
       return;
     }
 
@@ -39,6 +38,14 @@ class CATThermostatCard extends HTMLElement {
     }
 
     this._updateContent(entity);
+  }
+
+  _renderPlaceholder() {
+    this.shadowRoot.innerHTML = `
+      <div style="padding: 20px; border: 2px dashed #ccc; border-radius: 24px; text-align: center; color: #777;">
+        Please select a Climate entity in the editor
+      </div>
+    `;
   }
 
   _renderStructure() {
@@ -61,23 +68,17 @@ class CATThermostatCard extends HTMLElement {
         .card-header { padding: 24px 24px 16px; }
         .heating-indicator { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
         .heating-icon { width: 20px; height: 20px; color: white; opacity: 0.5; }
-        
-        .is-heating .heating-icon {
-          animation: breathe 2s infinite ease-in-out;
-          opacity: 1;
-        }
+        .is-heating .heating-icon { animation: breathe 2s infinite ease-in-out; opacity: 1; }
         @keyframes breathe {
           0%, 100% { transform: scale(1); opacity: 0.6; }
           50% { transform: scale(1.15); opacity: 1; }
         }
-
         .status-text { color: white; font-size: 14px; font-weight: 500; opacity: 0.9; }
         .radiator-name { color: white; font-size: 24px; font-weight: 600; margin: 0; }
         .temp-display { padding: 0 24px 24px; }
         .current-temp-wrapper { display: flex; align-items: baseline; }
         .current-temp { color: white; font-size: 72px; font-weight: 300; line-height: 1; letter-spacing: -2px; }
         .degree-symbol { color: white; font-size: 42px; font-weight: 300; opacity: 0.8; margin-left: 2px; }
-        
         .target-section {
           background: rgba(255, 255, 255, 0.15);
           backdrop-filter: blur(5px);
@@ -89,7 +90,6 @@ class CATThermostatCard extends HTMLElement {
         .target-temp { color: white; font-size: 32px; font-weight: 600; }
         .target-degree { font-size: 18px; margin-left: 1px; }
       </style>
-      
       <div class="cat-card">
         <div class="card-header">
           <div class="heating-indicator">
@@ -116,30 +116,29 @@ class CATThermostatCard extends HTMLElement {
     `;
 
     this.shadowRoot.querySelector('.cat-card').addEventListener('click', () => {
-      const event = new CustomEvent('hass-more-info', {
-        detail: { entityId: this.config.entity },
-        bubbles: true,
-        composed: true,
-      });
-      this.dispatchEvent(event);
+      if (this.config.entity) {
+        const event = new CustomEvent('hass-more-info', {
+          detail: { entityId: this.config.entity },
+          bubbles: true,
+          composed: true,
+        });
+        this.dispatchEvent(event);
+      }
     });
   }
 
   _updateContent(entity) {
     const card = this.shadowRoot.querySelector('.cat-card');
+    if (!card) return;
+
     const isHeating = entity.state === 'heat' || entity.attributes.hvac_action === 'heating';
-    
     card.classList.toggle('is-heating', isHeating);
     card.style.background = `linear-gradient(135deg, ${this.config.color_start || '#fb923c'} 0%, ${this.config.color_end || '#f97316'} 100%)`;
 
     this.shadowRoot.querySelector('.current-temp').textContent = Math.round(entity.attributes.current_temperature || 0);
     this.shadowRoot.querySelector('.target-temp').textContent = Math.round(entity.attributes.temperature || 0);
-    this.shadowRoot.querySelector('.radiator-name').textContent = this.config.name || entity.attributes.friendly_name;
+    this.shadowRoot.querySelector('.radiator-name').textContent = this.config.name || entity.attributes.friendly_name || this.config.entity;
     this.shadowRoot.querySelector('.status-text').textContent = isHeating ? 'Heating' : 'Idle';
-  }
-
-  _createErrorHTML(message) {
-    return `<style>.err{padding:16px;color:#ff5252;background:#201111;border-radius:12px;}</style><div class="err">${message}</div>`;
   }
 
   getCardSize() { return 3; }
@@ -157,28 +156,29 @@ class CATThermostatCardEditor extends HTMLElement {
   }
 
   _render() {
-    if (!this._config) return;
+    if (!this._config || !this._hass) return;
 
     this._initialized = true;
     this.innerHTML = `
-      <div class="card-config" style="display: flex; flex-direction: column; gap: 15px;">
-        <paper-input 
-          label="Name (Optional)" 
-          .value="${this._config.name || ''}" 
-          config-value="name">
-        </paper-input>
-
+      <div class="card-config" style="display: flex; flex-direction: column; gap: 16px; padding: 8px;">
         <ha-entity-picker 
+          label="Radiator Entity"
           .hass="${this._hass}" 
-          .value="${this._config.entity}" 
+          .value="${this._config.entity || ''}" 
           .includeDomains='["climate"]'
           config-value="entity"
           allow-custom-entity
         ></ha-entity-picker>
 
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: center;">
+        <paper-input 
+          label="Display Name (Optional)" 
+          .value="${this._config.name || ''}" 
+          config-value="name">
+        </paper-input>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
           <div>
-             <label style="display: block; margin-bottom: 8px; font-size: 12px; opacity: 0.7;">Gradient Start</label>
+             <label style="display: block; margin-bottom: 8px; font-size: 13px;">Gradient Start</label>
              <ha-color-picker 
                 .hass="${this._hass}" 
                 .value="${this._config.color_start || '#fb923c'}" 
@@ -186,7 +186,7 @@ class CATThermostatCardEditor extends HTMLElement {
              </ha-color-picker>
           </div>
           <div>
-             <label style="display: block; margin-bottom: 8px; font-size: 12px; opacity: 0.7;">Gradient End</label>
+             <label style="display: block; margin-bottom: 8px; font-size: 13px;">Gradient End</label>
              <ha-color-picker 
                 .hass="${this._hass}" 
                 .value="${this._config.color_end || '#f97316'}" 
@@ -197,7 +197,6 @@ class CATThermostatCardEditor extends HTMLElement {
       </div>
     `;
 
-    // Listen for changes on all inputs and the pickers
     this.querySelectorAll('paper-input, ha-entity-picker, ha-color-picker').forEach(el => {
       el.addEventListener('value-changed', (ev) => this._valueChanged(ev));
     });
@@ -230,6 +229,6 @@ window.customCards = window.customCards || [];
 window.customCards.push({
   type: 'cat-thermostat-card',
   name: 'CAT Thermostat Card',
-  description: 'A HomeKit-style thermostat card with a color picker editor',
+  description: 'A HomeKit-style thermostat card with a visual editor',
   preview: true,
 });
