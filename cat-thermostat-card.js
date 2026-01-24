@@ -24,7 +24,9 @@ class CATThermostatCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
-    const entityId = this.config?.entity;
+    if (!this.config) return;
+
+    const entityId = this.config.entity;
     const entity = entityId ? hass.states[entityId] : null;
 
     if (!entity) {
@@ -41,17 +43,14 @@ class CATThermostatCard extends HTMLElement {
 
   _renderPlaceholder() {
     this.shadowRoot.innerHTML = `
-      <div style="padding: 24px; border: 2px dashed #444; border-radius: 24px; text-align: center; color: #aaa; font-family: sans-serif;">
+      <div style="padding: 24px; border: 2px dashed #444; border-radius: 24px; text-align: center; color: #aaa; font-family: sans-serif; background: #222;">
         <b>CAT Thermostat</b><br>
-        Select a radiator entity in the editor below.
+        Please select a radiator in the editor dropdown below.
       </div>
     `;
   }
 
   _renderStructure() {
-    const colorStart = this.config.color_start || '#fb923c';
-    const colorEnd = this.config.color_end || '#f97316';
-
     this.shadowRoot.innerHTML = `
       <style>
         :host { display: block; }
@@ -59,16 +58,16 @@ class CATThermostatCard extends HTMLElement {
           border-radius: 24px;
           padding: 24px;
           transition: background 0.5s ease;
-          background: linear-gradient(135deg, ${colorStart} 0%, ${colorEnd} 100%);
           color: white;
           font-family: system-ui, -apple-system, sans-serif;
+          box-shadow: 0 4px 15px rgba(0,0,0,0.2);
         }
-        .radiator-name { font-size: 24px; font-weight: 600; margin: 0; }
-        .current-temp { font-size: 64px; font-weight: 300; }
-        .status { opacity: 0.8; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; }
+        .radiator-name { font-size: 22px; font-weight: 600; margin: 0; }
+        .current-temp { font-size: 56px; font-weight: 300; margin: 10px 0; }
+        .status { opacity: 0.7; font-size: 13px; text-transform: uppercase; font-weight: bold; }
       </style>
       <div class="cat-card">
-        <div class="status">Idle</div>
+        <div class="status">--</div>
         <h2 class="radiator-name">---</h2>
         <div class="current-temp">--°</div>
       </div>
@@ -88,7 +87,7 @@ class CATThermostatCard extends HTMLElement {
   }
 }
 
-// --- THE VISUAL EDITOR CLASS ---
+// --- THE ROBUST VISUAL EDITOR CLASS ---
 class CATThermostatCardEditor extends HTMLElement {
   setConfig(config) {
     this._config = config;
@@ -96,54 +95,70 @@ class CATThermostatCardEditor extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
-    if (!this._initialized) {
-      this._render();
-    } else {
-      // Keep the picker updated with latest hass data so the list populates
-      const picker = this.querySelector("ha-entity-picker");
-      if (picker) picker.hass = hass;
-    }
+    this._render();
   }
 
   _render() {
-    this._initialized = true;
-    this.innerHTML = `
-      <div id="editor-container" style="display: flex; flex-direction: column; gap: 20px; padding: 10px;">
-        <div id="picker-slot"></div>
-        <paper-input label="Custom Name" id="name-input"></paper-input>
-        <div style="display: flex; gap: 10px;">
-           <ha-color-picker label="Start" id="color-start"></ha-color-picker>
-           <ha-color-picker label="End" id="color-end"></ha-color-picker>
+    // GUARD: If config isn't loaded yet, stop to prevent "undefined" error
+    if (!this._config || !this._hass) return;
+
+    // Only build the UI once to prevent focus loss and flickering
+    if (!this._initialized) {
+      this.innerHTML = `
+        <style>
+          .editor-container { display: flex; flex-direction: column; gap: 16px; padding: 10px; font-family: sans-serif; }
+          .label { display: block; margin-bottom: 8px; font-size: 12px; opacity: 0.8; }
+        </style>
+        <div class="editor-container">
+          <div id="entity-picker-area"></div>
+          <paper-input label="Custom Name (Optional)" id="name-input" .configValue="${"name"}"></paper-input>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div>
+              <span class="label">Start Color</span>
+              <ha-color-picker id="start-picker" .configValue="${"color_start"}"></ha-color-picker>
+            </div>
+            <div>
+              <span class="label">End Color</span>
+              <ha-color-picker id="end-picker" .configValue="${"color_end"}"></ha-color-picker>
+            </div>
+          </div>
         </div>
-      </div>
-    `;
+      `;
 
-    // 1. Manually create the Entity Picker to ensure it registers correctly
-    const picker = document.createElement("ha-entity-picker");
-    picker.label = "Select Radiator Entity";
-    picker.hass = this._hass;
-    picker.value = this._config.entity;
-    picker.includeDomains = ["climate"]; // This limits the list to Radiators/Thermostats
-    picker.allowCustomEntity = true;
+      // Manually create the entity picker to force it to initialize
+      const picker = document.createElement("ha-entity-picker");
+      picker.setAttribute("label", "Select Radiator");
+      picker.includeDomains = ["climate"];
+      picker.setAttribute("config-value", "entity");
+      this.querySelector("#entity-picker-area").appendChild(picker);
+
+      // Attach events
+      this.addEventListener("value-changed", this._valueChanged.bind(this));
+      
+      this._initialized = true;
+    }
+
+    // Always sync current data to the elements
+    const picker = this.querySelector("ha-entity-picker");
+    if (picker) {
+      picker.hass = this._hass;
+      picker.value = this._config.entity || "";
+    }
     
-    this.querySelector("#picker-slot").appendChild(picker);
-
-    // 2. Set initial values for other fields
     this.querySelector("#name-input").value = this._config.name || "";
-    this.querySelector("#color-start").value = this._config.color_start || "#fb923c";
-    this.querySelector("#color-end").value = this._config.color_end || "#f97316";
-
-    // 3. Listen for changes
-    picker.addEventListener("value-changed", (ev) => this._handleUpdate("entity", ev.detail.value));
-    this.querySelector("#name-input").addEventListener("value-changed", (ev) => this._handleUpdate("name", ev.detail.value));
-    this.querySelector("#color-start").addEventListener("value-changed", (ev) => this._handleUpdate("color_start", ev.detail.value));
-    this.querySelector("#color-end").addEventListener("value-changed", (ev) => this._handleUpdate("color_end", ev.detail.value));
+    this.querySelector("#start-picker").value = this._config.color_start || "#fb923c";
+    this.querySelector("#end-picker").value = this._config.color_end || "#f97316";
   }
 
-  _handleUpdate(key, value) {
+  _valueChanged(ev) {
     if (!this._config) return;
-    const newConfig = { ...this._config, [key]: value };
-    this._config = newConfig; // Update local copy
+    const target = ev.target;
+    const configValue = target.configValue || target.getAttribute("config-value");
+    const value = ev.detail.value;
+
+    if (this._config[configValue] === value) return;
+
+    const newConfig = { ...this._config, [configValue]: value };
     
     this.dispatchEvent(new CustomEvent("config-changed", {
       detail: { config: newConfig },
@@ -153,7 +168,6 @@ class CATThermostatCardEditor extends HTMLElement {
   }
 }
 
-// Register components
 customElements.define('cat-thermostat-card', CATThermostatCard);
 customElements.define('cat-thermostat-card-editor', CATThermostatCardEditor);
 
@@ -161,6 +175,6 @@ window.customCards = window.customCards || [];
 window.customCards.push({
   type: 'cat-thermostat-card',
   name: 'CAT Radiator Card',
-  description: 'A custom card for radiators with a working picker.',
+  description: 'Fixed radiator card with working entity list.',
   preview: true,
 });
