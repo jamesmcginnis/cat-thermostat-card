@@ -1,1 +1,5 @@
-{  "name": "cat-thermostat-card",  "render_readme": true,  "filename": "cat-thermostat-card.js"}
+{
+  "name": "cat-thermostat-card",
+  "render_readme": true,
+  "filename": "cat-thermostat-card.js"
+}
