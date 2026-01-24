@@ -1,4 +1,3 @@
-// --- THE MAIN CARD CLASS ---
 class CATThermostatCard extends HTMLElement {
   constructor() {
     super();
@@ -24,52 +23,45 @@ class CATThermostatCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
-    if (!this.config) return;
-
-    const entityId = this.config.entity;
-    const entity = entityId ? hass.states[entityId] : null;
-
-    if (!entity) {
+    if (!this.config || !this.config.entity) {
       this._renderPlaceholder();
       return;
     }
 
-    if (!this.shadowRoot.querySelector('.cat-card')) {
-      this._renderStructure();
+    const entity = hass.states[this.config.entity];
+    if (!entity) {
+      this._renderPlaceholder("Entity not found");
+      return;
     }
 
+    this._renderStructure();
     this._updateContent(entity);
   }
 
-  _renderPlaceholder() {
+  _renderPlaceholder(msg = "Select a radiator in the editor") {
     this.shadowRoot.innerHTML = `
-      <div style="padding: 24px; border: 2px dashed #444; border-radius: 24px; text-align: center; color: #aaa; font-family: sans-serif; background: #222;">
-        <b>CAT Thermostat</b><br>
-        Please select a radiator in the editor dropdown below.
+      <div style="padding: 24px; border: 2px dashed #444; border-radius: 24px; text-align: center; color: #aaa; font-family: sans-serif;">
+        <b>CAT Thermostat</b><br>${msg}
       </div>
     `;
   }
 
   _renderStructure() {
+    if (this.shadowRoot.querySelector('.cat-card')) return;
     this.shadowRoot.innerHTML = `
       <style>
-        :host { display: block; }
         .cat-card {
-          border-radius: 24px;
-          padding: 24px;
-          transition: background 0.5s ease;
-          color: white;
-          font-family: system-ui, -apple-system, sans-serif;
-          box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+          border-radius: 24px; padding: 24px; color: white;
+          font-family: system-ui, sans-serif; transition: background 0.5s ease;
         }
-        .radiator-name { font-size: 22px; font-weight: 600; margin: 0; }
-        .current-temp { font-size: 56px; font-weight: 300; margin: 10px 0; }
-        .status { opacity: 0.7; font-size: 13px; text-transform: uppercase; font-weight: bold; }
+        .name { font-size: 20px; font-weight: 600; margin: 0; }
+        .temp { font-size: 48px; font-weight: 300; margin: 8px 0; }
+        .status { opacity: 0.7; font-size: 12px; text-transform: uppercase; }
       </style>
       <div class="cat-card">
         <div class="status">--</div>
-        <h2 class="radiator-name">---</h2>
-        <div class="current-temp">--°</div>
+        <h2 class="name">---</h2>
+        <div class="temp">--°</div>
       </div>
     `;
   }
@@ -77,17 +69,15 @@ class CATThermostatCard extends HTMLElement {
   _updateContent(entity) {
     const card = this.shadowRoot.querySelector('.cat-card');
     if (!card) return;
-    
     const isHeating = entity.state === 'heat' || entity.attributes.hvac_action === 'heating';
     card.style.background = `linear-gradient(135deg, ${this.config.color_start || '#fb923c'} 0%, ${this.config.color_end || '#f97316'} 100%)`;
-    
-    this.shadowRoot.querySelector('.radiator-name').textContent = this.config.name || entity.attributes.friendly_name || this.config.entity;
-    this.shadowRoot.querySelector('.current-temp').textContent = Math.round(entity.attributes.current_temperature || 0) + '°';
+    this.shadowRoot.querySelector('.name').textContent = this.config.name || entity.attributes.friendly_name;
+    this.shadowRoot.querySelector('.temp').textContent = Math.round(entity.attributes.current_temperature || 0) + '°';
     this.shadowRoot.querySelector('.status').textContent = isHeating ? 'Heating' : 'Idle';
   }
 }
 
-// --- THE ROBUST VISUAL EDITOR CLASS ---
+// --- UPDATED EDITOR ---
 class CATThermostatCardEditor extends HTMLElement {
   setConfig(config) {
     this._config = config;
@@ -99,72 +89,40 @@ class CATThermostatCardEditor extends HTMLElement {
   }
 
   _render() {
-    // GUARD: If config isn't loaded yet, stop to prevent "undefined" error
+    // CRITICAL: Stop if config is missing to prevent the 'undefined' error
     if (!this._config || !this._hass) return;
-
-    // Only build the UI once to prevent focus loss and flickering
-    if (!this._initialized) {
-      this.innerHTML = `
-        <style>
-          .editor-container { display: flex; flex-direction: column; gap: 16px; padding: 10px; font-family: sans-serif; }
-          .label { display: block; margin-bottom: 8px; font-size: 12px; opacity: 0.8; }
-        </style>
-        <div class="editor-container">
-          <div id="entity-picker-area"></div>
-          <paper-input label="Custom Name (Optional)" id="name-input" .configValue="${"name"}"></paper-input>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-            <div>
-              <span class="label">Start Color</span>
-              <ha-color-picker id="start-picker" .configValue="${"color_start"}"></ha-color-picker>
-            </div>
-            <div>
-              <span class="label">End Color</span>
-              <ha-color-picker id="end-picker" .configValue="${"color_end"}"></ha-color-picker>
-            </div>
-          </div>
-        </div>
-      `;
-
-      // Manually create the entity picker to force it to initialize
-      const picker = document.createElement("ha-entity-picker");
-      picker.setAttribute("label", "Select Radiator");
-      picker.includeDomains = ["climate"];
-      picker.setAttribute("config-value", "entity");
-      this.querySelector("#entity-picker-area").appendChild(picker);
-
-      // Attach events
-      this.addEventListener("value-changed", this._valueChanged.bind(this));
-      
-      this._initialized = true;
+    if (this._initialized) {
+        // Keep the form updated with latest HASS data
+        const form = this.querySelector('ha-form');
+        if (form) form.hass = this._hass;
+        return;
     }
 
-    // Always sync current data to the elements
-    const picker = this.querySelector("ha-entity-picker");
-    if (picker) {
-      picker.hass = this._hass;
-      picker.value = this._config.entity || "";
-    }
-    
-    this.querySelector("#name-input").value = this._config.name || "";
-    this.querySelector("#start-picker").value = this._config.color_start || "#fb923c";
-    this.querySelector("#end-picker").value = this._config.color_end || "#f97316";
-  }
+    this._initialized = true;
+    this.innerHTML = `
+      <div style="padding: 16px;">
+        <ha-form
+          .hass="${this._hass}"
+          .data="${this._config}"
+          .schema="${[
+            { name: "entity", label: "Select Radiator", selector: { entity: { domain: "climate" } } },
+            { name: "name", label: "Display Name", selector: { text: {} } },
+            { name: "color_start", label: "Start Color", selector: { color_rgb: {} } },
+            { name: "color_end", label: "End Color", selector: { color_rgb: {} } }
+          ]}"
+          .computeLabel="${(s) => s.label}"
+        ></ha-form>
+      </div>
+    `;
 
-  _valueChanged(ev) {
-    if (!this._config) return;
-    const target = ev.target;
-    const configValue = target.configValue || target.getAttribute("config-value");
-    const value = ev.detail.value;
-
-    if (this._config[configValue] === value) return;
-
-    const newConfig = { ...this._config, [configValue]: value };
-    
-    this.dispatchEvent(new CustomEvent("config-changed", {
-      detail: { config: newConfig },
-      bubbles: true,
-      composed: true,
-    }));
+    this.querySelector("ha-form").addEventListener("value-changed", (ev) => {
+      const config = ev.detail.value;
+      this.dispatchEvent(new CustomEvent("config-changed", {
+        detail: { config },
+        bubbles: true,
+        composed: true,
+      }));
+    });
   }
 }
 
@@ -175,6 +133,6 @@ window.customCards = window.customCards || [];
 window.customCards.push({
   type: 'cat-thermostat-card',
   name: 'CAT Radiator Card',
-  description: 'Fixed radiator card with working entity list.',
+  description: 'Visual editor with working entity dropdown.',
   preview: true,
 });
