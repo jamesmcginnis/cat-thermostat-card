@@ -66,11 +66,7 @@ class CATThermostatCard extends HTMLElement {
           0%, 100% { transform: scale(1); opacity: 0.6; }
           50% { transform: scale(1.15); opacity: 1; }
         }
-        .bottom-row { 
-          display: flex; 
-          align-items: baseline; 
-          gap: 8px; 
-        }
+        .bottom-row { display: flex; align-items: baseline; gap: 6px; }
         .target-label { font-size: 12px; opacity: 0.7; text-transform: uppercase; font-weight: 600; }
         .target-temp { font-size: 18px; font-weight: 600; }
       </style>
@@ -105,6 +101,7 @@ class CATThermostatCard extends HTMLElement {
     const card = this.shadowRoot.querySelector('.card');
     const isHeating = entity.attributes.hvac_action === 'heating' || entity.state === 'heat';
     
+    // Determine colors based on state
     const start = isHeating ? (this.config.heat_start || '#fb923c') : (this.config.idle_start || '#374151');
     const end = isHeating ? (this.config.heat_end || '#f97316') : (this.config.idle_end || '#111827');
     
@@ -117,6 +114,7 @@ class CATThermostatCard extends HTMLElement {
   }
 }
 
+// --- UPDATED EDITOR WITH 4 COLOR PICKERS ---
 class CATThermostatCardEditor extends HTMLElement {
   setConfig(config) { this._config = config || {}; }
   set hass(hass) { this._hass = hass; this._render(); }
@@ -180,6 +178,6 @@ window.customCards = window.customCards || [];
 window.customCards.push({
   type: 'cat-thermostat-card',
   name: 'CAT Radiator Card',
-  description: 'Clean inline layout for target temperature.',
+  description: 'Dynamic colors for heating vs idle states.',
   preview: true,
 });
