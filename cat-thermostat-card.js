@@ -21,6 +21,9 @@ class CATThermostatCard extends HTMLElement {
 
   setConfig(config) {
     this.config = config;
+    if (this._hass && this.config.entity) {
+      this._updateContent(this._hass.states[this.config.entity]);
+    }
   }
 
   set hass(hass) {
@@ -34,7 +37,7 @@ class CATThermostatCard extends HTMLElement {
   }
 
   _renderPlaceholder() {
-    this.shadowRoot.innerHTML = `<div style="padding:10px;border:1px dashed #888;border-radius:10px;text-align:center;color:#888;font-size:11px;">Select Radiator</div>`;
+    this.shadowRoot.innerHTML = `<div style="padding:10px;border:1px dashed #888;border-radius:10px;text-align:center;color:#888;font-size:11px;">Select Radiator in Editor</div>`;
   }
 
   _renderStructure() {
@@ -63,9 +66,8 @@ class CATThermostatCard extends HTMLElement {
         .entity-name { font-size: 11px; font-weight: 700; text-transform: uppercase; opacity: 0.8; line-height: 1.2; }
         .target-line { font-size: 10px; opacity: 0.6; display: flex; gap: 4px; align-items: baseline; }
         .target-val { font-weight: 700; font-size: 11px; }
-        
         .right-side { display: flex; align-items: center; }
-        .flame-icon { width: 20px; height: 20px; opacity: 0; transition: opacity 0.5s ease; }
+        .flame-icon { width: 20px; height: 20px; opacity: 0; transition: opacity 0.5s ease; color: white; }
         .is-heating .flame-icon { opacity: 1; animation: breathe 2.5s infinite ease-in-out; }
         @keyframes breathe {
           0%, 100% { transform: scale(1); opacity: 0.5; }
@@ -109,6 +111,7 @@ class CATThermostatCard extends HTMLElement {
   }
 
   _updateContent(entity) {
+    if (!entity || !this.shadowRoot.querySelector('.card')) return;
     const card = this.shadowRoot.querySelector('.card');
     const isHeating = entity.attributes.hvac_action === 'heating' || entity.state === 'heat';
     const start = isHeating ? (this.config.heat_start || '#fb923c') : (this.config.idle_start || '#374151');
@@ -122,7 +125,6 @@ class CATThermostatCard extends HTMLElement {
   }
 }
 
-// --- UPDATED EDITOR: LABELS WITH FORCED COLOR ---
 class CATThermostatCardEditor extends HTMLElement {
   setConfig(config) { this._config = config || {}; }
   set hass(hass) { this._hass = hass; this._render(); }
@@ -166,8 +168,8 @@ class CATThermostatCardEditor extends HTMLElement {
     `;
     this.querySelectorAll('input, select').forEach(el => {
       el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', (ev) => {
-        const key = ev.target.id.replace('-', '_');
-        const newConfig = { ...this._config, [key]: ev.target.value };
+        const field = ev.target.id.replace('-', '_');
+        const newConfig = { ...this._config, [field]: ev.target.value };
         this._config = newConfig;
         this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: newConfig }, bubbles: true, composed: true }));
       });
@@ -182,6 +184,6 @@ window.customCards = window.customCards || [];
 window.customCards.push({
   type: 'cat-thermostat-card',
   name: 'CAT Radiator Card',
-  description: 'Fixed visible labels in the editor.',
+  description: 'Fixed entity selection sync.',
   preview: true,
 });
