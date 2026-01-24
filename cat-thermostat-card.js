@@ -157,10 +157,17 @@ class CATThermostatCardEditor extends HTMLElement {
   }
 
   _render() {
+    if (!this._config) return;
+
     this._initialized = true;
     this.innerHTML = `
-      <div class="card-config">
-        <paper-input label="Name (Optional)" .value="${this._config.name || ''}" config-value="name"></paper-input>
+      <div class="card-config" style="display: flex; flex-direction: column; gap: 15px;">
+        <paper-input 
+          label="Name (Optional)" 
+          .value="${this._config.name || ''}" 
+          config-value="name">
+        </paper-input>
+
         <ha-entity-picker 
           .hass="${this._hass}" 
           .value="${this._config.entity}" 
@@ -168,14 +175,30 @@ class CATThermostatCardEditor extends HTMLElement {
           config-value="entity"
           allow-custom-entity
         ></ha-entity-picker>
-        <div style="display: flex; gap: 10px; margin-top: 15px;">
-          <paper-input label="Gradient Start" .value="${this._config.color_start || '#fb923c'}" config-value="color_start"></paper-input>
-          <paper-input label="Gradient End" .value="${this._config.color_end || '#f97316'}" config-value="color_end"></paper-input>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: center;">
+          <div>
+             <label style="display: block; margin-bottom: 8px; font-size: 12px; opacity: 0.7;">Gradient Start</label>
+             <ha-color-picker 
+                .hass="${this._hass}" 
+                .value="${this._config.color_start || '#fb923c'}" 
+                config-value="color_start">
+             </ha-color-picker>
+          </div>
+          <div>
+             <label style="display: block; margin-bottom: 8px; font-size: 12px; opacity: 0.7;">Gradient End</label>
+             <ha-color-picker 
+                .hass="${this._hass}" 
+                .value="${this._config.color_end || '#f97316'}" 
+                config-value="color_end">
+             </ha-color-picker>
+          </div>
         </div>
       </div>
     `;
 
-    this.querySelectorAll('paper-input, ha-entity-picker').forEach(el => {
+    // Listen for changes on all inputs and the pickers
+    this.querySelectorAll('paper-input, ha-entity-picker, ha-color-picker').forEach(el => {
       el.addEventListener('value-changed', (ev) => this._valueChanged(ev));
     });
   }
@@ -185,6 +208,8 @@ class CATThermostatCardEditor extends HTMLElement {
     const target = ev.target;
     const value = ev.detail.value;
     const configValue = target.getAttribute('config-value');
+
+    if (this._config[configValue] === value) return;
 
     const newConfig = { ...this._config, [configValue]: value };
     
@@ -204,7 +229,7 @@ customElements.define('cat-thermostat-card-editor', CATThermostatCardEditor);
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: 'cat-thermostat-card',
-  name: 'cat-thermostat-card',
-  description: 'A HomeKit-style thermostat card with a visual editor',
+  name: 'CAT Thermostat Card',
+  description: 'A HomeKit-style thermostat card with a color picker editor',
   preview: true,
 });
