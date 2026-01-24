@@ -15,7 +15,11 @@ class CATThermostatCard extends HTMLElement {
       idle_start: '#374151',  
       idle_end: '#111827', 
       heat_start: '#fb923c',  
-      heat_end: '#f97316'  
+      heat_end: '#f97316',
+      current_temp_color: '#ffffff',
+      name_color: '#ffffff',
+      target_label_color: '#ffffff',
+      target_temp_color: '#ffffff'
     }; 
   } 
 
@@ -113,9 +117,21 @@ class CATThermostatCard extends HTMLElement {
     card.style.background = `linear-gradient(135deg, ${start}, ${end})`; 
     card.classList.toggle('is-heating', isHeating); 
 
-    this.shadowRoot.querySelector('.current-temp').textContent = Math.round(entity.attributes.current_temperature || 0) + '°'; 
-    this.shadowRoot.querySelector('.entity-name').textContent = this.config.name || entity.attributes.friendly_name; 
-    this.shadowRoot.querySelector('.target-temp').textContent = Math.round(entity.attributes.temperature || 0) + '°'; 
+    const currentTempEl = this.shadowRoot.querySelector('.current-temp');
+    const nameEl = this.shadowRoot.querySelector('.entity-name');
+    const targetLabelEl = this.shadowRoot.querySelector('.target-label');
+    const targetTempEl = this.shadowRoot.querySelector('.target-temp');
+
+    currentTempEl.textContent = Math.round(entity.attributes.current_temperature || 0) + '°'; 
+    currentTempEl.style.color = this.config.current_temp_color || '#ffffff';
+
+    nameEl.textContent = this.config.name || entity.attributes.friendly_name; 
+    nameEl.style.color = this.config.name_color || '#ffffff';
+
+    targetLabelEl.style.color = this.config.target_label_color || '#ffffff';
+
+    targetTempEl.textContent = Math.round(entity.attributes.temperature || 0) + '°'; 
+    targetTempEl.style.color = this.config.target_temp_color || '#ffffff';
   } 
 } 
 
@@ -143,19 +159,45 @@ class CATThermostatCardEditor extends HTMLElement {
         </div> 
 
         <div style="border-top: 1px solid #444; padding-top: 10px;"> 
-          <label style="display:block; margin-bottom:10px; font-weight:bold; color: #fb923c;">Heating Colors (Active)</label> 
-          <div style="display:flex; gap:10px;"> 
-            <div style="flex:1;"><input id="heat-start" type="color" value="${this._config.heat_start || '#fb923c'}" style="width:100%; height:35px; border:none; background:none;"></div> 
-            <div style="flex:1;"><input id="heat-end" type="color" value="${this._config.heat_end || '#f97316'}" style="width:100%; height:35px; border:none; background:none;"></div> 
-          </div> 
+          <label style="display:block; margin-bottom:10px; font-weight:bold;">Background Colors</label> 
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+            <div>
+              <span style="font-size:10px; color:#fb923c">HEATING</span>
+              <div style="display:flex; gap:5px;">
+                <input id="heat-start" type="color" value="${this._config.heat_start || '#fb923c'}" style="width:100%; height:30px; border:none; background:none;">
+                <input id="heat-end" type="color" value="${this._config.heat_end || '#f97316'}" style="width:100%; height:30px; border:none; background:none;">
+              </div>
+            </div>
+            <div>
+              <span style="font-size:10px; color:#9ca3af">IDLE</span>
+              <div style="display:flex; gap:5px;">
+                <input id="idle-start" type="color" value="${this._config.idle_start || '#374151'}" style="width:100%; height:30px; border:none; background:none;">
+                <input id="idle-end" type="color" value="${this._config.idle_end || '#111827'}" style="width:100%; height:30px; border:none; background:none;">
+              </div>
+            </div>
+          </div>
         </div> 
 
         <div style="border-top: 1px solid #444; padding-top: 10px;"> 
-          <label style="display:block; margin-bottom:10px; font-weight:bold; color: #9ca3af;">Idle Colors (Off)</label> 
-          <div style="display:flex; gap:10px;"> 
-            <div style="flex:1;"><input id="idle-start" type="color" value="${this._config.idle_start || '#374151'}" style="width:100%; height:35px; border:none; background:none;"></div> 
-            <div style="flex:1;"><input id="idle-end" type="color" value="${this._config.idle_end || '#111827'}" style="width:100%; height:35px; border:none; background:none;"></div> 
-          </div> 
+          <label style="display:block; margin-bottom:10px; font-weight:bold;">Text Colors</label> 
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+            <div>
+              <span style="font-size:10px;">CURRENT TEMP</span>
+              <input id="current-temp-color" type="color" value="${this._config.current_temp_color || '#ffffff'}" style="width:100%; height:30px; border:none; background:none;">
+            </div>
+            <div>
+              <span style="font-size:10px;">NAME TEXT</span>
+              <input id="name-color" type="color" value="${this._config.name_color || '#ffffff'}" style="width:100%; height:30px; border:none; background:none;">
+            </div>
+            <div>
+              <span style="font-size:10px;">'HEATING TO' LABEL</span>
+              <input id="target-label-color" type="color" value="${this._config.target_label_color || '#ffffff'}" style="width:100%; height:30px; border:none; background:none;">
+            </div>
+            <div>
+              <span style="font-size:10px;">TARGET TEMP</span>
+              <input id="target-temp-color" type="color" value="${this._config.target_temp_color || '#ffffff'}" style="width:100%; height:30px; border:none; background:none;">
+            </div>
+          </div>
         </div> 
       </div> 
     `; 
@@ -166,6 +208,10 @@ class CATThermostatCardEditor extends HTMLElement {
     this.querySelector('#heat-end').addEventListener('input', (ev) => this._update('heat_end', ev.target.value)); 
     this.querySelector('#idle-start').addEventListener('input', (ev) => this._update('idle_start', ev.target.value)); 
     this.querySelector('#idle-end').addEventListener('input', (ev) => this._update('idle_end', ev.target.value)); 
+    this.querySelector('#current-temp-color').addEventListener('input', (ev) => this._update('current_temp_color', ev.target.value)); 
+    this.querySelector('#name-color').addEventListener('input', (ev) => this._update('name_color', ev.target.value)); 
+    this.querySelector('#target-label-color').addEventListener('input', (ev) => this._update('target_label_color', ev.target.value)); 
+    this.querySelector('#target-temp-color').addEventListener('input', (ev) => this._update('target_temp_color', ev.target.value)); 
   } 
 
   _update(key, value) { 
@@ -182,6 +228,6 @@ window.customCards = window.customCards || [];
 window.customCards.push({ 
   type: 'cat-thermostat-card', 
   name: 'CAT Radiator Card', 
-  description: 'Compact dynamic radiator card for mobile.', 
+  description: 'Compact dynamic radiator card for mobile with custom text colors.', 
   preview: true, 
 });
