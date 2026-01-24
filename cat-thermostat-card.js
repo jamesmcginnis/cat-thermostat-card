@@ -23,6 +23,7 @@ class CATThermostatCard extends HTMLElement {
   }
 
   set hass(hass) {
+    this._hass = hass;
     const entityId = this.config?.entity;
     const entity = entityId ? hass.states[entityId] : null;
 
@@ -42,7 +43,7 @@ class CATThermostatCard extends HTMLElement {
     this.shadowRoot.innerHTML = `
       <div style="padding: 24px; border: 2px dashed rgba(255,255,255,0.3); border-radius: 24px; text-align: center; background: #2c2c2c; color: white; font-family: system-ui;">
         <div style="font-size: 16px; font-weight: 600;">CAT Thermostat</div>
-        <div style="font-size: 12px; opacity: 0.6; margin-top: 4px;">Open editor to select a radiator</div>
+        <div style="font-size: 12px; opacity: 0.6; margin-top: 4px;">Select a climate entity in the editor</div>
       </div>
     `;
   }
@@ -147,56 +148,49 @@ class CATThermostatCardEditor extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
-    // We re-render if hass changes to ensure the picker always has the latest data
     this._render();
   }
 
   _render() {
-    if (!this._config || !this._hass) return;
+    if (!this._config || !this._hass || this._initialized) return;
+    this._initialized = true;
 
+    // Use ha-form for the entity selector to ensure the dropdown list works
     this.innerHTML = `
-      <div class="card-config" style="display: flex; flex-direction: column; gap: 16px; font-family: sans-serif;">
-        <div class="editor-row">
-          <ha-entity-picker 
-            .label="${"Select Radiator"}"
-            .hass="${this._hass}" 
-            .value="${this._config.entity || ''}" 
-            .includeDomains='${JSON.stringify(["climate"])}'
-            config-value="entity"
-          ></ha-entity-picker>
-        </div>
-
-        <paper-input 
-          label="Custom Name (Optional)" 
-          .value="${this._config.name || ''}" 
-          config-value="name"
-        ></paper-input>
-
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-          <div>
-             <label style="display: block; margin-bottom: 8px; font-size: 12px; opacity: 0.7;">Gradient Start</label>
-             <ha-color-picker 
-                .hass="${this._hass}" 
-                .value="${this._config.color_start || '#fb923c'}" 
-                config-value="color_start">
-             </ha-color-picker>
-          </div>
-          <div>
-             <label style="display: block; margin-bottom: 8px; font-size: 12px; opacity: 0.7;">Gradient End</label>
-             <ha-color-picker 
-                .hass="${this._hass}" 
-                .value="${this._config.color_end || '#f97316'}" 
-                config-value="color_end">
-             </ha-color-picker>
-          </div>
-        </div>
+      <div class="card-config" style="padding: 16px;">
+        <ha-form
+          .hass="${this._hass}"
+          .data="${this._config}"
+          .schema="${[
+            { name: "entity", selector: { entity: { domain: "climate" } } },
+            { name: "name", label: "Display Name", selector: { text: {} } },
+            { name: "color_start", label: "Gradient Start", selector: { color_rgb: {} } },
+            { name: "color_end", label: "Gradient End", selector: { color_rgb: {} } }
+          ]}"
+          .computeLabel="${(schema) => schema.label || schema.name}"
+        ></ha-form>
       </div>
     `;
 
-    this.querySelectorAll('paper-input, ha-entity-picker, ha-color-picker').forEach(el => {
-      // Use 'value-changed' for the picker and color wheel, 'change' for basic inputs
-      el.addEventListener('value-changed', (ev) => this._valueChanged(ev));
+    this.querySelector("ha-form").addEventListener("value-changed", (ev) => {
+      const config = ev.detail.value;
+      const event = new CustomEvent("config-changed", {
+        detail: { config },
+        bubbles: true,
+        composed: true,
+      });
+      this.dispatchEvent(event);
     });
   }
+}
 
-  _valueChanged(ev) {
+customElements.define('cat-thermostat-card', CATThermostatCard);
+customElements.define('cat-thermostat-card-editor', CATThermostatCardEditor);
+
+window.customCards = window.customCards || [];
+window.customCards.push({
+  type: 'cat-thermostat-card',
+  name: 'CAT Thermostat Card',
+  description: 'A HomeKit-style radiator card',
+  preview: true,
+});
