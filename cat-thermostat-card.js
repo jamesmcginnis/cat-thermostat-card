@@ -128,9 +128,10 @@ class CATThermostatCard extends HTMLElement {
     nameEl.textContent = this.config.name || entity.attributes.friendly_name; 
     nameEl.style.color = this.config.name_color || '#ffffff';
 
+    targetLabelEl.textContent = isHeating ? 'Heating to' : 'Idle';
     targetLabelEl.style.color = this.config.target_label_color || '#ffffff';
 
-    targetTempEl.textContent = Math.round(entity.attributes.temperature || 0) + '°'; 
+    targetTempEl.textContent = isHeating ? Math.round(entity.attributes.temperature || 0) + '°' : ''; 
     targetTempEl.style.color = this.config.target_temp_color || '#ffffff';
   } 
 } 
