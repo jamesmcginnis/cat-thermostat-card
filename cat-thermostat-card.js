@@ -16,6 +16,8 @@ class CATThermostatCard extends HTMLElement {
       idle_end: '#111827', 
       heat_start: '#fb923c',  
       heat_end: '#f97316',
+      cool_start: '#60a5fa',
+      cool_end: '#2563eb',
       current_temp_color: '#ffffff',
       name_color: '#ffffff',
       target_label_color: '#ffffff',
@@ -67,8 +69,8 @@ class CATThermostatCard extends HTMLElement {
         .current-temp { font-size: 34px; font-weight: 300; line-height: 1; margin-bottom: 2px; } 
         .entity-name { font-size: 11px; font-weight: 700; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.5px; }
 
-        .flame-icon { width: 24px; height: 24px; opacity: 0; transition: opacity 0.5s ease; } 
-        .is-heating .flame-icon { opacity: 1; animation: breathe 2.5s infinite ease-in-out; } 
+        .state-icon { width: 24px; height: 24px; opacity: 0; transition: opacity 0.5s ease; } 
+        .is-active .state-icon { opacity: 1; animation: breathe 2.5s infinite ease-in-out; } 
         
         @keyframes breathe { 
           0%, 100% { transform: scale(1); opacity: 0.6; } 
@@ -85,12 +87,10 @@ class CATThermostatCard extends HTMLElement {
             <div class="current-temp">--°</div> 
             <div class="entity-name">---</div>
           </div> 
-          <svg class="flame-icon" viewBox="0 0 24 24" fill="currentColor"> 
-            <path d="M17.5,12A5.5,5.5 0 0,1 12,17.5A5.5,5.5 0 0,1 6.5,12C6.5,10.15 7.42,8.5 8.84,7.5C8.35,9.03 8.89,10.74 10.13,11.66C10.1,11.44 10.08,11.22 10.08,11C10.08,9.08 11.08,7.39 12.58,6.44C12.1,8.03 12.72,9.78 14.09,10.73C14.06,10.5 14.03,10.25 14.03,10C14.03,8.37 14.73,6.91 15.84,5.88C15.42,7.5 16.09,9.25 17.5,10.23V12M12,22A10,10 0 0,0 22,12C22,10.03 21.42,8.2 20.42,6.67C19.89,8.27 18.5,9.44 16.82,9.44C17.2,8.08 17,6.62 16.24,5.43C16.89,4 16.89,2.37 16.24,1C14.41,2.29 13.31,4.43 13.31,6.82C11.94,5.43 10,4.55 7.91,4.55C8.42,6.03 8.24,7.67 7.42,9C5.31,10.11 3.88,12.38 3.88,15A8.12,8.12 0 0,0 12,23.12V22Z" /> 
-          </svg> 
+          <div class="icon-container"></div>
         </div> 
         <div class="bottom-row">
-          <span class="target-label">Heating to</span>
+          <span class="target-label">---</span>
           <span class="target-temp">--°</span> 
         </div> 
       </div> 
@@ -110,12 +110,27 @@ class CATThermostatCard extends HTMLElement {
     const card = this.shadowRoot.querySelector('.card'); 
     if (!card) return;
     const isHeating = entity.attributes.hvac_action === 'heating' || entity.state === 'heat'; 
-     
-    const start = isHeating ? (this.config.heat_start || '#fb923c') : (this.config.idle_start || '#374151'); 
-    const end = isHeating ? (this.config.heat_end || '#f97316') : (this.config.idle_end || '#111827'); 
+    const isCooling = entity.attributes.hvac_action === 'cooling' || entity.state === 'cool';
+
+    let start, end;
+    if (isHeating) {
+      start = this.config.heat_start || '#fb923c';
+      end = this.config.heat_end || '#f97316';
+    } else if (isCooling) {
+      start = this.config.cool_start || '#60a5fa';
+      end = this.config.cool_end || '#2563eb';
+    } else {
+      start = this.config.idle_start || '#374151';
+      end = this.config.idle_end || '#111827';
+    }
      
     card.style.background = `linear-gradient(135deg, ${start}, ${end})`; 
-    card.classList.toggle('is-heating', isHeating); 
+    card.classList.toggle('is-active', isHeating || isCooling); 
+
+    const iconContainer = this.shadowRoot.querySelector('.icon-container');
+    const flameIcon = `<svg class="state-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M17.5,12A5.5,5.5 0 0,1 12,17.5A5.5,5.5 0 0,1 6.5,12C6.5,10.15 7.42,8.5 8.84,7.5C8.35,9.03 8.89,10.74 10.13,11.66C10.1,11.44 10.08,11.22 10.08,11C10.08,9.08 11.08,7.39 12.58,6.44C12.1,8.03 12.72,9.78 14.09,10.73C14.06,10.5 14.03,10.25 14.03,10C14.03,8.37 14.73,6.91 15.84,5.88C15.42,7.5 16.09,9.25 17.5,10.23V12M12,22A10,10 0 0,0 22,12C22,10.03 21.42,8.2 20.42,6.67C19.89,8.27 18.5,9.44 16.82,9.44C17.2,8.08 17,6.62 16.24,5.43C16.89,4 16.89,2.37 16.24,1C14.41,2.29 13.31,4.43 13.31,6.82C11.94,5.43 10,4.55 7.91,4.55C8.42,6.03 8.24,7.67 7.42,9C5.31,10.11 3.88,12.38 3.88,15A8.12,8.12 0 0,0 12,23.12V22Z" /></svg>`;
+    const snowflakeIcon = `<svg class="state-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M22,11H19.17L21,9.17L19.58,7.76L17.17,10.17L15,8V5H18V3H15V1H13V3H11V1H9V3H6V5H9V8L6.83,10.17L4.42,7.76L3,9.17L4.83,11H2V13H4.83L3,14.83L4.42,16.24L6.83,13.83L9,16V19H6V21H9V23H11V21H13V23H15V21H18V19H15V16L17.17,13.83L19.58,16.24L21,14.83L19.17,13H22V11M13,14V19H11V14H6.5L9,11.5L6.5,9H11V4H13V9H17.5L15,11.5L17.5,14H13Z" /></svg>`;
+    iconContainer.innerHTML = isHeating ? flameIcon : (isCooling ? snowflakeIcon : '');
 
     const currentTempEl = this.shadowRoot.querySelector('.current-temp');
     const nameEl = this.shadowRoot.querySelector('.entity-name');
@@ -128,12 +143,12 @@ class CATThermostatCard extends HTMLElement {
     nameEl.textContent = this.config.name || entity.attributes.friendly_name; 
     nameEl.style.color = this.config.name_color || '#ffffff';
 
-    // Logic for other states
-    const currentState = entity.state.charAt(0).toUpperCase() + entity.state.slice(1);
-    targetLabelEl.textContent = isHeating ? 'Heating to' : currentState;
+    const hvacState = entity.state.charAt(0).toUpperCase() + entity.state.slice(1);
+    targetLabelEl.textContent = isHeating ? 'Heating to' : (isCooling ? 'Cooling to' : hvacState);
     targetLabelEl.style.color = this.config.target_label_color || '#ffffff';
 
-    targetTempEl.textContent = isHeating ? Math.round(entity.attributes.temperature || 0) + '°' : ''; 
+    const showTarget = isHeating || isCooling;
+    targetTempEl.textContent = showTarget ? Math.round(entity.attributes.temperature || 0) + '°' : ''; 
     targetTempEl.style.color = this.config.target_temp_color || '#ffffff';
   } 
 } 
@@ -172,7 +187,14 @@ class CATThermostatCardEditor extends HTMLElement {
               </div>
             </div>
             <div>
-              <span style="font-size:10px; color:#9ca3af">IDLE</span>
+              <span style="font-size:10px; color:#60a5fa">COOLING</span>
+              <div style="display:flex; gap:5px;">
+                <input id="cool-start" type="color" value="${this._config.cool_start || '#60a5fa'}" style="width:100%; height:30px; border:none; background:none;">
+                <input id="cool-end" type="color" value="${this._config.cool_end || '#2563eb'}" style="width:100%; height:30px; border:none; background:none;">
+              </div>
+            </div>
+            <div style="grid-column: span 2;">
+              <span style="font-size:10px; color:#9ca3af">IDLE / OTHER</span>
               <div style="display:flex; gap:5px;">
                 <input id="idle-start" type="color" value="${this._config.idle_start || '#374151'}" style="width:100%; height:30px; border:none; background:none;">
                 <input id="idle-end" type="color" value="${this._config.idle_end || '#111827'}" style="width:100%; height:30px; border:none; background:none;">
@@ -193,7 +215,7 @@ class CATThermostatCardEditor extends HTMLElement {
               <input id="name-color" type="color" value="${this._config.name_color || '#ffffff'}" style="width:100%; height:30px; border:none; background:none;">
             </div>
             <div>
-              <span style="font-size:10px;">'HEATING TO' LABEL</span>
+              <span style="font-size:10px;">LABEL TEXT</span>
               <input id="target-label-color" type="color" value="${this._config.target_label_color || '#ffffff'}" style="width:100%; height:30px; border:none; background:none;">
             </div>
             <div>
@@ -209,6 +231,8 @@ class CATThermostatCardEditor extends HTMLElement {
     this.querySelector('#name-input').addEventListener('input', (ev) => this._update('name', ev.target.value)); 
     this.querySelector('#heat-start').addEventListener('input', (ev) => this._update('heat_start', ev.target.value)); 
     this.querySelector('#heat-end').addEventListener('input', (ev) => this._update('heat_end', ev.target.value)); 
+    this.querySelector('#cool-start').addEventListener('input', (ev) => this._update('cool_start', ev.target.value)); 
+    this.querySelector('#cool-end').addEventListener('input', (ev) => this._update('cool_end', ev.target.value)); 
     this.querySelector('#idle-start').addEventListener('input', (ev) => this._update('idle_start', ev.target.value)); 
     this.querySelector('#idle-end').addEventListener('input', (ev) => this._update('idle_end', ev.target.value)); 
     this.querySelector('#current-temp-color').addEventListener('input', (ev) => this._update('current_temp_color', ev.target.value)); 
@@ -231,6 +255,6 @@ window.customCards = window.customCards || [];
 window.customCards.push({ 
   type: 'cat-thermostat-card', 
   name: 'CAT Radiator Card', 
-  description: 'Compact dynamic radiator card for mobile with custom text colors.', 
+  description: 'Compact dynamic radiator card with heating and cooling icons.', 
   preview: true, 
 });
