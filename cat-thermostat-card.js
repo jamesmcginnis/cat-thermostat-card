@@ -51,7 +51,7 @@ class CATThermostatCard extends HTMLElement {
           border-radius: 16px;  
           padding: 14px 16px;  
           color: white;  
-          font-family: -apple-system, system-ui, sans-serif;  
+          font-family: var(--paper-font-common-base_-_font-family, inherit);  
           height: 120px; 
           display: flex; 
           flex-direction: column; 
@@ -297,6 +297,6 @@ window.customCards = window.customCards || [];
 window.customCards.push({ 
   type: 'cat-thermostat-card', 
   name: 'CAT Radiator Card', 
-  description: 'Pro dynamic radiator card with physical buttons and state icons.', 
+  description: 'Dynamic radiator card with custom font support and manual controls.', 
   preview: true, 
 });
