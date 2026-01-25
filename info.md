@@ -1,69 +1,78 @@
-# CAT Thermostat Card
+# CAT Radiator Card
 
-A beautiful, HomeKit-style thermostat card for Home Assistant with customizable gradients and smooth animations.
+A beautiful, animated thermostat card for Home Assistant with dynamic gradients and intuitive controls.
 
-## Features
+## ✨ Key Features
 
-✨ **Modern Design** - Clean, HomeKit-inspired interface with smooth animations
+- 🔥 **Animated State Indicators** - Pulsing flame when heating, snowflake when cooling
+- 🎨 **Dynamic Gradients** - Smooth color transitions based on thermostat state
+- 🎯 **Quick Controls** - Adjust temperature with +/- buttons directly on the card
+- 🖌️ **Fully Customizable** - Configure all colors including backgrounds and text
+- 📱 **Responsive Design** - Compact layout perfect for any dashboard
+- ⚙️ **Visual Editor** - Easy configuration through Home Assistant UI
 
-🎨 **Customizable Colors** - Choose your own gradient color schemes
+## 🖼️ Preview
 
-🔥 **Heating Indicator** - Animated flame icon shows when actively heating
+The card features three distinct visual states:
 
-✏️ **Visual Editor** - Easy configuration directly in the Home Assistant UI
+- **Heating**: Warm orange/red gradient with animated flame icon
+- **Cooling**: Cool blue gradient with animated snowflake icon  
+- **Idle**: Neutral gray gradient with no icon
 
-📱 **Responsive** - Works beautifully on desktop, tablet, and mobile
+Each state includes:
+- Large current temperature display
+- Entity name label
+- Target temperature with contextual label ("Heating to", "Cooling to", or state name)
+- Temperature adjustment controls
 
-⚡ **Smooth Interactions** - Breathing animation for heating state and tap feedback
+## 🎨 Customization
 
-## Quick Start
+Every visual element is customizable:
 
-After installation, add the card to your dashboard:
+**Background Gradients**
+- Heating state colors (start & end)
+- Cooling state colors (start & end)
+- Idle state colors (start & end)
 
-1. Click "Add Card" on your dashboard
-2. Search for "CAT Thermostat Card"
+**Text Colors**
+- Current temperature
+- Entity name
+- Target label
+- Target temperature
+
+## 📋 Requirements
+
+- Home Assistant 2023.x or newer
+- Climate entity (thermostat, radiator, HVAC, etc.)
+
+## 🚀 Quick Start
+
+1. Install via HACS or manually
+2. Add card to your dashboard
 3. Select your climate entity
-4. Customize the name and colors (optional)
+4. Customize colors to match your theme
+5. Enjoy!
 
-## Configuration
+## 💡 Use Cases
 
-```yaml
-type: custom:cat-thermostat-card
-entity: climate.living_room
-name: Living Room
-color_start: '#fb923c'
-color_end: '#f97316'
-```
+Perfect for:
+- Individual room radiators
+- Central heating thermostats
+- Air conditioning units
+- Smart TRVs (Thermostatic Radiator Valves)
+- Zone climate control
+- Any `climate` entity in Home Assistant
 
-### Options
+## 🎯 Design Philosophy
 
-| Option | Type | Required | Default | Description |
-|--------|------|----------|---------|-------------|
-| `entity` | string | Yes | - | Climate entity ID |
-| `name` | string | No | Entity name | Display name |
-| `color_start` | string | No | `#fb923c` | Gradient start color |
-| `color_end` | string | No | `#f97316` | Gradient end color |
+This card prioritizes:
+- **Visual Clarity** - Instant understanding of heating/cooling status
+- **Quick Access** - Common actions (temperature adjustment) right on the card
+- **Aesthetic Appeal** - Smooth animations and modern gradients
+- **Flexibility** - Adapts to any color scheme or dashboard design
 
-## Color Examples
+## 🔧 Technical Details
 
-**Cool Blue**
-```yaml
-color_start: '#60a5fa'
-color_end: '#3b82f6'
-```
-
-**Purple**
-```yaml
-color_start: '#c084fc'
-color_end: '#a855f7'
-```
-
-**Green**
-```yaml
-color_start: '#4ade80'
-color_end: '#22c55e'
-```
-
-## Support
-
-For issues, feature requests, or questions, please visit the [GitHub repository](https://github.com/yourusername/cat-thermostat-card).
+- Built with Web Components (Custom Elements)
+- Shadow DOM for style encapsulation
+- Smooth CSS
