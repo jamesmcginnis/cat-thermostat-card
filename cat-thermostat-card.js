@@ -52,7 +52,7 @@ class CATThermostatCard extends HTMLElement {
           padding: 14px 16px;  
           color: white;  
           font-family: -apple-system, system-ui, sans-serif;  
-          height: 100px; 
+          height: 120px; 
           display: flex; 
           flex-direction: column; 
           justify-content: space-between; 
@@ -60,11 +60,9 @@ class CATThermostatCard extends HTMLElement {
           box-shadow: 0 4px 12px rgba(0,0,0,0.15); 
           position: relative; 
           box-sizing: border-box;
-          cursor: pointer; 
         } 
-        .card:active { transform: scale(0.96); } 
         
-        .top-row { display: flex; justify-content: space-between; align-items: flex-start; } 
+        .top-row { display: flex; justify-content: space-between; align-items: flex-start; cursor: pointer; } 
         .temp-group { display: flex; flex-direction: column; }
         .current-temp { font-size: 34px; font-weight: 300; line-height: 1; margin-bottom: 2px; } 
         .entity-name { font-size: 11px; font-weight: 700; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.5px; }
@@ -77,9 +75,28 @@ class CATThermostatCard extends HTMLElement {
           50% { transform: scale(1.1); opacity: 1; } 
         } 
         
-        .bottom-row { display: flex; align-items: baseline; gap: 4px; }
+        .bottom-row { display: flex; justify-content: space-between; align-items: flex-end; }
+        .target-info { display: flex; align-items: baseline; gap: 4px; }
         .target-label { font-size: 11px; opacity: 0.7; text-transform: uppercase; font-weight: 600; }
         .target-temp { font-size: 14px; font-weight: 600; }
+
+        .controls { display: flex; gap: 8px; }
+        .btn { 
+          background: rgba(255,255,255,0.15); 
+          border: none; 
+          border-radius: 8px; 
+          color: white; 
+          width: 32px; 
+          height: 32px; 
+          display: flex; 
+          align-items: center; 
+          justify-content: center; 
+          cursor: pointer;
+          transition: background 0.2s;
+        }
+        .btn:hover { background: rgba(255,255,255,0.25); }
+        .btn:active { transform: scale(0.9); }
+        .btn svg { width: 18px; height: 18px; fill: currentColor; }
       </style> 
       <div class="card"> 
         <div class="top-row"> 
@@ -90,13 +107,19 @@ class CATThermostatCard extends HTMLElement {
           <div class="icon-container"></div>
         </div> 
         <div class="bottom-row">
-          <span class="target-label">---</span>
-          <span class="target-temp">--°</span> 
+          <div class="target-info">
+            <span class="target-label">---</span>
+            <span class="target-temp">--°</span> 
+          </div>
+          <div class="controls">
+            <button class="btn minus"><svg viewBox="0 0 24 24"><path d="M19,13H5V11H19V13Z" /></svg></button>
+            <button class="btn plus"><svg viewBox="0 0 24 24"><path d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z" /></svg></button>
+          </div>
         </div> 
       </div> 
     `; 
 
-    this.shadowRoot.querySelector('.card').addEventListener('click', () => { 
+    this.shadowRoot.querySelector('.top-row').addEventListener('click', () => { 
       const event = new CustomEvent('hass-more-info', { 
         detail: { entityId: this.config.entity }, 
         bubbles: true, 
@@ -104,7 +127,26 @@ class CATThermostatCard extends HTMLElement {
       }); 
       this.dispatchEvent(event); 
     }); 
+
+    this.shadowRoot.querySelector('.minus').addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._changeTemp(-0.5);
+    });
+
+    this.shadowRoot.querySelector('.plus').addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._changeTemp(0.5);
+    });
   } 
+
+  _changeTemp(change) {
+    const entity = this._hass.states[this.config.entity];
+    const newTemp = (entity.attributes.temperature || 0) + change;
+    this._hass.callService('climate', 'set_temperature', {
+      entity_id: this.config.entity,
+      temperature: newTemp
+    });
+  }
 
   _updateContent(entity) { 
     const card = this.shadowRoot.querySelector('.card'); 
@@ -255,6 +297,6 @@ window.customCards = window.customCards || [];
 window.customCards.push({ 
   type: 'cat-thermostat-card', 
   name: 'CAT Radiator Card', 
-  description: 'Compact dynamic radiator card with heating and cooling icons.', 
+  description: 'Pro dynamic radiator card with physical buttons and state icons.', 
   preview: true, 
 });
