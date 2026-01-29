@@ -1,4 +1,4 @@
-class CATThermostatCard extends HTMLElement { 
+Class CATThermostatCard extends HTMLElement { 
   constructor() { 
     super(); 
     this.attachShadow({ mode: 'open' }); 
