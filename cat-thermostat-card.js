@@ -47,19 +47,24 @@ class CATThermostatCard extends HTMLElement {
     if (this.shadowRoot.querySelector('.card')) return; 
     this.shadowRoot.innerHTML = ` 
       <style> 
+        :host {
+          display: block;
+          height: 100%;
+        }
         .card {  
-          border-radius: 16px;  
-          padding: 14px 16px;  
+          border-radius: var(--ha-card-border-radius, 12px);  
+          padding: 16px;  
           color: white;  
           font-family: var(--paper-font-common-base_-_font-family, inherit);  
-          height: 120px; 
+          min-height: 100px;
           display: flex; 
           flex-direction: column; 
           justify-content: space-between; 
-          transition: background 0.8s ease, transform 0.2s ease; 
-          box-shadow: 0 4px 12px rgba(0,0,0,0.15); 
+          transition: background 0.8s ease; 
+          box-shadow: var(--ha-card-box-shadow, 0 2px 2px rgba(0,0,0,0.14)); 
           position: relative; 
           box-sizing: border-box;
+          height: 100%;
         } 
         
         .top-row { display: flex; justify-content: space-between; align-items: flex-start; cursor: pointer; } 
@@ -75,7 +80,7 @@ class CATThermostatCard extends HTMLElement {
           50% { transform: scale(1.1); opacity: 1; } 
         } 
         
-        .bottom-row { display: flex; justify-content: space-between; align-items: flex-end; }
+        .bottom-row { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 12px; }
         .target-info { display: flex; align-items: baseline; gap: 4px; }
         .target-label { font-size: 11px; opacity: 0.7; text-transform: uppercase; font-weight: 600; }
         .target-temp { font-size: 14px; font-weight: 600; }
@@ -298,6 +303,6 @@ window.customCards = window.customCards || [];
 window.customCards.push({ 
   type: 'cat-thermostat-card', 
   name: 'CAT Radiator Card', 
-  description: 'Dynamic radiator card with custom font support and manual controls.', 
+  description: 'Dynamic radiator card with standard Home Assistant sizing and 0.5° increments.', 
   preview: true, 
 });
