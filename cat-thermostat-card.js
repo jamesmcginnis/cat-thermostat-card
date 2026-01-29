@@ -82,7 +82,7 @@ class CATThermostatCard extends HTMLElement {
         
         .bottom-row { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 12px; }
         .target-info { display: flex; align-items: baseline; gap: 4px; }
-        .target-label { font-size: 11px; opacity: 0.7; text-transform: uppercase; font-weight: 600; }
+        .target-label { font-size: 11px; opacity: 0.7; font-weight: 600; }
         .target-temp { font-size: 14px; font-weight: 600; }
 
         .controls { display: flex; gap: 8px; }
@@ -114,7 +114,7 @@ class CATThermostatCard extends HTMLElement {
         <div class="bottom-row">
           <div class="target-info">
             <span class="target-label">---</span>
-            <span class="target-temp">--°</span> 
+            <span class="target-temp"></span> 
           </div>
           <div class="controls">
             <button class="btn minus"><svg viewBox="0 0 24 24"><path d="M19,13H5V11H19V13Z" /></svg></button>
@@ -192,7 +192,7 @@ class CATThermostatCard extends HTMLElement {
     nameEl.style.color = this.config.name_color || '#ffffff';
 
     const hvacState = entity.state.charAt(0).toUpperCase() + entity.state.slice(1);
-    targetLabelEl.textContent = isHeating ? 'Heating to' : (isCooling ? 'Cooling to' : hvacState);
+    targetLabelEl.textContent = isHeating ? 'Heating to ' : (isCooling ? 'Cooling to ' : hvacState);
     targetLabelEl.style.color = this.config.target_label_color || '#ffffff';
 
     const showTarget = isHeating || isCooling;
