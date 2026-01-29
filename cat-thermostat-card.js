@@ -1,4 +1,4 @@
-class CATThermostatCard extends HTMLElement { 
+Class CATThermostatCard extends HTMLElement { 
   constructor() { 
     super(); 
     this.attachShadow({ mode: 'open' }); 
@@ -141,7 +141,8 @@ class CATThermostatCard extends HTMLElement {
 
   _changeTemp(change) {
     const entity = this._hass.states[this.config.entity];
-    const newTemp = (entity.attributes.temperature || 0) + change;
+    const currentTarget = entity.attributes.temperature || 0;
+    const newTemp = parseFloat((currentTarget + change).toFixed(1));
     this._hass.callService('climate', 'set_temperature', {
       entity_id: this.config.entity,
       temperature: newTemp
@@ -179,7 +180,7 @@ class CATThermostatCard extends HTMLElement {
     const targetLabelEl = this.shadowRoot.querySelector('.target-label');
     const targetTempEl = this.shadowRoot.querySelector('.target-temp');
 
-    currentTempEl.textContent = Math.round(entity.attributes.current_temperature || 0) + '°'; 
+    currentTempEl.textContent = (entity.attributes.current_temperature || 0).toFixed(1) + '°'; 
     currentTempEl.style.color = this.config.current_temp_color || '#ffffff';
 
     nameEl.textContent = this.config.name || entity.attributes.friendly_name; 
@@ -190,7 +191,7 @@ class CATThermostatCard extends HTMLElement {
     targetLabelEl.style.color = this.config.target_label_color || '#ffffff';
 
     const showTarget = isHeating || isCooling;
-    targetTempEl.textContent = showTarget ? Math.round(entity.attributes.temperature || 0) + '°' : ''; 
+    targetTempEl.textContent = showTarget ? (entity.attributes.temperature || 0).toFixed(1) + '°' : ''; 
     targetTempEl.style.color = this.config.target_temp_color || '#ffffff';
   } 
 } 
