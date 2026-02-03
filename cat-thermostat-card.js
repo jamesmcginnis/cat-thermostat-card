@@ -214,7 +214,7 @@ class CATThermostatCardEditor extends HTMLElement {
         <div> 
           <label style="display:block; margin-bottom:5px; font-weight:bold;">Radiator Entity</label> 
           <select id="entity-select" style="width:100%; padding:8px; border-radius:4px; background:#222; color:white; border:1px solid #444;"> 
-            <option value="">-- Select Radiator --</option> 
+            <option value="">-- Select Thermostat --</option> 
             ${climateEntities.map(eid => `<option value="${eid}" ${this._config.entity === eid ? 'selected' : ''}>${this._hass.states[eid].attributes.friendly_name || eid}</option>`).join('')} 
           </select> 
         </div> 
@@ -302,7 +302,7 @@ customElements.define('cat-thermostat-card-editor', CATThermostatCardEditor);
 window.customCards = window.customCards || []; 
 window.customCards.push({ 
   type: 'cat-thermostat-card', 
-  name: 'CAT Radiator Card', 
-  description: 'Dynamic radiator card with standard Home Assistant sizing and 0.5° increments.', 
+  name: 'CAT Thermostat Card', 
+  description: 'Dynamic Thermostat card with standard Home Assistant sizing and 0.5° increments.', 
   preview: true, 
 });
