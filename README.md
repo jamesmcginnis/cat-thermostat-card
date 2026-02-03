@@ -44,7 +44,7 @@ resources:
 
 1. Edit your dashboard
 2. Click "Add Card"
-3. Search for "CAT Radiator Card"
+3. Search for "CAT Thermostat Card"
 4. Select your climate entity from the dropdown
 5. Customize colors and appearance as desired
 
@@ -138,7 +138,7 @@ name_color: '#a1a1aa'
 
 ## Troubleshooting
 
-**Card shows "Select a Radiator in the Visual Editor"**
+**Card shows "Select a Thermostat in the Visual Editor"**
 - The entity hasn't been configured yet. Use the visual editor to select a climate entity.
 
 **Colors not updating**
