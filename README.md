@@ -20,7 +20,7 @@ A beautiful, dynamic thermostat card for Home Assistant with animated heating/co
 1. Open HACS in your Home Assistant instance
 2. Go to "Frontend"
 3. Click the menu (⋮) and select "Custom repositories"
-4. Add this repository URL and select "Lovelace" as the category
+4. Add this repository URL and select "Dashboard" as the category
 5. Click "Install"
 6. Restart Home Assistant
 
