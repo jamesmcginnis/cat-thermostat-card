@@ -40,7 +40,7 @@ class CATThermostatCard extends HTMLElement {
   } 
 
   _renderPlaceholder() { 
-    this.shadowRoot.innerHTML = `<div style="padding:15px;border:1px dashed #888;border-radius:12px;text-align:center;color:#888;font-size:12px;">Select a Radiator in the Visual Editor</div>`; 
+    this.shadowRoot.innerHTML = `<div style="padding:15px;border:1px dashed #888;border-radius:12px;text-align:center;color:#888;font-size:12px;">Select a Thermostat in the Visual Editor</div>`; 
   } 
 
   _renderStructure() { 
@@ -212,7 +212,7 @@ class CATThermostatCardEditor extends HTMLElement {
     this.innerHTML = ` 
       <div style="display:flex; flex-direction:column; gap:15px; padding:10px; font-family:sans-serif;"> 
         <div> 
-          <label style="display:block; margin-bottom:5px; font-weight:bold;">Radiator Entity</label> 
+          <label style="display:block; margin-bottom:5px; font-weight:bold;">Thermostat Entity</label> 
           <select id="entity-select" style="width:100%; padding:8px; border-radius:4px; background:#222; color:white; border:1px solid #444;"> 
             <option value="">-- Select Thermostat --</option> 
             ${climateEntities.map(eid => `<option value="${eid}" ${this._config.entity === eid ? 'selected' : ''}>${this._hass.states[eid].attributes.friendly_name || eid}</option>`).join('')} 
