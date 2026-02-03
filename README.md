@@ -1,4 +1,4 @@
-# CAT Radiator Card
+# CAT Thermostat Card
 
 A beautiful, dynamic thermostat card for Home Assistant with animated heating/cooling indicators, customizable gradient backgrounds, and intuitive temperature controls.
 
