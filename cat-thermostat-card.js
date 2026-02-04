@@ -29,7 +29,13 @@ class CATThermostatCard extends HTMLElement {
       current_temp_color: '#ffffff',
       name_color: '#ffffff',
       target_label_color: '#ffffff',
-      target_temp_color: '#ffffff'
+      target_temp_color: '#ffffff',
+      icon_heating: '',
+      icon_cooling: '',
+      icon_heat_cool: '',
+      icon_dry: '',
+      icon_fan_only: '',
+      icon_off: ''
     }; 
   } 
 
@@ -81,7 +87,8 @@ class CATThermostatCard extends HTMLElement {
         .entity-name { font-size: 11px; font-weight: 700; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.5px; }
 
         .state-icon { width: 24px; height: 24px; opacity: 1; transition: opacity 0.5s ease; cursor: pointer; } 
-        .is-active .state-icon { animation: breathe 2.5s infinite ease-in-out; } 
+        .is-active .state-icon { animation: breathe 2.5s infinite ease-in-out; }
+        ha-icon.state-icon { --mdc-icon-size: 24px; display: block; } 
         
         @keyframes breathe { 
           0%, 100% { transform: scale(1); opacity: 0.6; } 
@@ -269,8 +276,8 @@ class CATThermostatCard extends HTMLElement {
     card.style.background = `linear-gradient(135deg, ${start}, ${end})`; 
     card.classList.toggle('is-active', isActive); 
 
-    // Icon definitions with animations
-    const icons = {
+    // Default icon definitions with animations
+    const defaultIcons = {
       heating: `<svg class="state-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M17.5,12A5.5,5.5 0 0,1 12,17.5A5.5,5.5 0 0,1 6.5,12C6.5,10.15 7.42,8.5 8.84,7.5C8.35,9.03 8.89,10.74 10.13,11.66C10.1,11.44 10.08,11.22 10.08,11C10.08,9.08 11.08,7.39 12.58,6.44C12.1,8.03 12.72,9.78 14.09,10.73C14.06,10.5 14.03,10.25 14.03,10C14.03,8.37 14.73,6.91 15.84,5.88C15.42,7.5 16.09,9.25 17.5,10.23V12M12,22A10,10 0 0,0 22,12C22,10.03 21.42,8.2 20.42,6.67C19.89,8.27 18.5,9.44 16.82,9.44C17.2,8.08 17,6.62 16.24,5.43C16.89,4 16.89,2.37 16.24,1C14.41,2.29 13.31,4.43 13.31,6.82C11.94,5.43 10,4.55 7.91,4.55C8.42,6.03 8.24,7.67 7.42,9C5.31,10.11 3.88,12.38 3.88,15A8.12,8.12 0 0,0 12,23.12V22Z" /></svg>`,
       cooling: `<svg class="state-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M22,11H19.17L21,9.17L19.58,7.76L17.17,10.17L15,8V5H18V3H15V1H13V3H11V1H9V3H6V5H9V8L6.83,10.17L4.42,7.76L3,9.17L4.83,11H2V13H4.83L3,14.83L4.42,16.24L6.83,13.83L9,16V19H6V21H9V23H11V21H13V23H15V21H18V19H15V16L17.17,13.83L19.58,16.24L21,14.83L19.17,13H22V11M13,14V19H11V14H6.5L9,11.5L6.5,9H11V4H13V9H17.5L15,11.5L17.5,14H13Z" /></svg>`,
       heat_cool: `<svg class="state-icon" viewBox="0 0 24 24" fill="currentColor" style="animation: pulse 2s infinite ease-in-out;"><path d="M12,2C10.73,2 9.6,2.8 9.18,4H3V6H4.95L2,14C1.53,16 3,17.45 5.5,18C8.5,18.55 9.5,19.5 9.5,21H14.5C14.5,19.5 15.5,18.55 18.5,18C21,17.45 22.47,16 22,14L19.05,6H21V4H14.82C14.4,2.8 13.27,2 12,2M12,4A1,1 0 0,1 13,5A1,1 0 0,1 12,6A1,1 0 0,1 11,5A1,1 0 0,1 12,4M5.05,6H18.95L21.9,14.12C22.03,14.82 21.63,15.5 20.73,15.84C17.35,17.06 16.39,18.25 16.14,19H7.86C7.61,18.25 6.65,17.06 3.27,15.84C2.37,15.5 1.97,14.82 2.1,14.12L5.05,6Z" /></svg>`,
@@ -279,10 +286,40 @@ class CATThermostatCard extends HTMLElement {
       off: `<svg class="state-icon" viewBox="0 0 24 24" fill="currentColor" style="opacity: 0.5;"><path d="M16.56,5.44L15.11,6.89C16.84,7.94 18,9.83 18,12A6,6 0 0,1 12,18A6,6 0 0,1 6,12C6,9.83 7.16,7.94 8.88,6.88L7.44,5.44C5.36,6.88 4,9.28 4,12A8,8 0 0,0 12,20A8,8 0 0,0 20,12C20,9.28 18.64,6.88 16.56,5.44M13,3H11V13H13" /></svg>`
     };
 
+    // Helper function to get custom icon or default
+    const getIcon = (mode, animationStyle = '') => {
+      const customIconKey = `icon_${mode}`;
+      const customIcon = this.config[customIconKey];
+      
+      if (customIcon) {
+        // Check if it's an MDI icon (starts with mdi:)
+        if (customIcon.startsWith('mdi:')) {
+          const iconName = customIcon.substring(4);
+          return `<ha-icon class="state-icon" icon="mdi:${iconName}" style="${animationStyle}"></ha-icon>`;
+        }
+        // Otherwise treat as URL to image
+        return `<img class="state-icon" src="${customIcon}" style="${animationStyle}" />`;
+      }
+      
+      // Return default icon
+      return defaultIcons[mode] || defaultIcons.off;
+    };
+
     const iconContainer = this.shadowRoot.querySelector('.icon-container');
     // Show power icon when off, otherwise show mode-specific icon
     const displayMode = entity.state === 'off' ? 'off' : mode;
-    iconContainer.innerHTML = icons[displayMode] || icons['off'];
+    
+    // Apply appropriate animation style based on mode
+    let animationStyle = '';
+    if (displayMode === 'heat_cool') {
+      animationStyle = 'animation: pulse 2s infinite ease-in-out;';
+    } else if (displayMode === 'fan_only') {
+      animationStyle = 'animation: spin 3s linear infinite;';
+    } else if (displayMode === 'off') {
+      animationStyle = 'opacity: 0.5;';
+    }
+    
+    iconContainer.innerHTML = getIcon(displayMode, animationStyle);
     
     // Add click handler to icon to toggle thermostat power
     const iconEl = iconContainer.querySelector('.state-icon');
@@ -415,6 +452,37 @@ class CATThermostatCardEditor extends HTMLElement {
               <input id="target-temp-color" type="color" value="${this._config.target_temp_color || '#ffffff'}" style="width:100%; height:30px; border:none; background:none;">
             </div>
           </div>
+        </div>
+
+        <div style="border-top: 1px solid #444; padding-top: 10px;"> 
+          <label style="display:block; margin-bottom:5px; font-weight:bold;">Custom Icons</label>
+          <p style="font-size:10px; color:#888; margin:0 0 10px 0;">Use MDI icons (e.g., "mdi:fire") or image URLs. Leave blank for defaults.</p>
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <div>
+              <span style="font-size:10px; color:#fb923c;">🔥 HEATING ICON</span>
+              <input id="icon-heating" type="text" value="${this._config.icon_heating || ''}" placeholder="mdi:fire or image URL" style="width:100%; padding:6px; border-radius:4px; background:#222; color:white; border:1px solid #444; font-size:11px;">
+            </div>
+            <div>
+              <span style="font-size:10px; color:#60a5fa;">❄️ COOLING ICON</span>
+              <input id="icon-cooling" type="text" value="${this._config.icon_cooling || ''}" placeholder="mdi:snowflake or image URL" style="width:100%; padding:6px; border-radius:4px; background:#222; color:white; border:1px solid #444; font-size:11px;">
+            </div>
+            <div>
+              <span style="font-size:10px; color:#a78bfa;">🔄 HEAT/COOL (AUTO) ICON</span>
+              <input id="icon-heat-cool" type="text" value="${this._config.icon_heat_cool || ''}" placeholder="mdi:autorenew or image URL" style="width:100%; padding:6px; border-radius:4px; background:#222; color:white; border:1px solid #444; font-size:11px;">
+            </div>
+            <div>
+              <span style="font-size:10px; color:#fbbf24;">💧 DRY ICON</span>
+              <input id="icon-dry" type="text" value="${this._config.icon_dry || ''}" placeholder="mdi:water-percent or image URL" style="width:100%; padding:6px; border-radius:4px; background:#222; color:white; border:1px solid #444; font-size:11px;">
+            </div>
+            <div>
+              <span style="font-size:10px; color:#34d399;">🌀 FAN ONLY ICON</span>
+              <input id="icon-fan-only" type="text" value="${this._config.icon_fan_only || ''}" placeholder="mdi:fan or image URL" style="width:100%; padding:6px; border-radius:4px; background:#222; color:white; border:1px solid #444; font-size:11px;">
+            </div>
+            <div>
+              <span style="font-size:10px; color:#9ca3af;">⏸️ OFF/POWER ICON</span>
+              <input id="icon-off" type="text" value="${this._config.icon_off || ''}" placeholder="mdi:power or image URL" style="width:100%; padding:6px; border-radius:4px; background:#222; color:white; border:1px solid #444; font-size:11px;">
+            </div>
+          </div>
         </div> 
       </div> 
     `; 
@@ -437,6 +505,12 @@ class CATThermostatCardEditor extends HTMLElement {
     this.querySelector('#name-color').addEventListener('input', (ev) => this._update('name_color', ev.target.value)); 
     this.querySelector('#target-label-color').addEventListener('input', (ev) => this._update('target_label_color', ev.target.value)); 
     this.querySelector('#target-temp-color').addEventListener('input', (ev) => this._update('target_temp_color', ev.target.value)); 
+    this.querySelector('#icon-heating').addEventListener('input', (ev) => this._update('icon_heating', ev.target.value)); 
+    this.querySelector('#icon-cooling').addEventListener('input', (ev) => this._update('icon_cooling', ev.target.value)); 
+    this.querySelector('#icon-heat-cool').addEventListener('input', (ev) => this._update('icon_heat_cool', ev.target.value)); 
+    this.querySelector('#icon-dry').addEventListener('input', (ev) => this._update('icon_dry', ev.target.value)); 
+    this.querySelector('#icon-fan-only').addEventListener('input', (ev) => this._update('icon_fan_only', ev.target.value)); 
+    this.querySelector('#icon-off').addEventListener('input', (ev) => this._update('icon_off', ev.target.value)); 
   } 
 
   _update(key, value) { 
