@@ -18,6 +18,14 @@ class CATThermostatCard extends HTMLElement {
       heat_end: '#f97316',
       cool_start: '#60a5fa',
       cool_end: '#2563eb',
+      heat_cool_start: '#a78bfa',
+      heat_cool_end: '#7c3aed',
+      dry_start: '#fbbf24',
+      dry_end: '#f59e0b',
+      fan_only_start: '#34d399',
+      fan_only_end: '#10b981',
+      auto_start: '#60a5fa',
+      auto_end: '#3b82f6',
       current_temp_color: '#ffffff',
       name_color: '#ffffff',
       target_label_color: '#ffffff',
@@ -72,13 +80,23 @@ class CATThermostatCard extends HTMLElement {
         .current-temp { font-size: 34px; font-weight: 300; line-height: 1; margin-bottom: 2px; } 
         .entity-name { font-size: 11px; font-weight: 700; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.5px; }
 
-        .state-icon { width: 24px; height: 24px; opacity: 0; transition: opacity 0.5s ease; } 
-        .is-active .state-icon { opacity: 1; animation: breathe 2.5s infinite ease-in-out; } 
+        .state-icon { width: 24px; height: 24px; opacity: 1; transition: opacity 0.5s ease; cursor: pointer; } 
+        .is-active .state-icon { animation: breathe 2.5s infinite ease-in-out; } 
         
         @keyframes breathe { 
           0%, 100% { transform: scale(1); opacity: 0.6; } 
           50% { transform: scale(1.1); opacity: 1; } 
         } 
+
+        @keyframes spin { 
+          0% { transform: rotate(0deg); } 
+          100% { transform: rotate(360deg); } 
+        }
+
+        @keyframes pulse { 
+          0%, 100% { transform: scale(1); opacity: 0.7; } 
+          50% { transform: scale(1.15); opacity: 1; } 
+        }
         
         .bottom-row { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 12px; }
         .target-info { display: flex; align-items: baseline; gap: 4px; }
@@ -124,7 +142,10 @@ class CATThermostatCard extends HTMLElement {
       </div> 
     `; 
 
-    this.shadowRoot.querySelector('.top-row').addEventListener('click', () => { 
+    this.shadowRoot.querySelector('.top-row').addEventListener('click', (e) => {
+      // Don't trigger more-info if clicking on the icon
+      if (e.target.closest('.icon-container')) return;
+      
       const event = new CustomEvent('hass-more-info', { 
         detail: { entityId: this.config.entity }, 
         bubbles: true, 
@@ -154,31 +175,124 @@ class CATThermostatCard extends HTMLElement {
     });
   }
 
+  _togglePower() {
+    const entity = this._hass.states[this.config.entity];
+    const currentState = entity.state;
+    
+    if (currentState === 'off') {
+      // Turn on to the last known mode or default to heat_cool/auto
+      const hvacModes = entity.attributes.hvac_modes || [];
+      let targetMode = 'heat_cool';
+      
+      // Prefer auto/heat_cool, then heat, then cool, then first available
+      if (hvacModes.includes('auto')) {
+        targetMode = 'auto';
+      } else if (hvacModes.includes('heat_cool')) {
+        targetMode = 'heat_cool';
+      } else if (hvacModes.includes('heat')) {
+        targetMode = 'heat';
+      } else if (hvacModes.includes('cool')) {
+        targetMode = 'cool';
+      } else if (hvacModes.length > 1) {
+        // Get first mode that isn't 'off'
+        targetMode = hvacModes.find(mode => mode !== 'off') || hvacModes[0];
+      }
+      
+      this._hass.callService('climate', 'set_hvac_mode', {
+        entity_id: this.config.entity,
+        hvac_mode: targetMode
+      });
+    } else {
+      // Turn off
+      this._hass.callService('climate', 'turn_off', {
+        entity_id: this.config.entity
+      });
+    }
+  }
+
+  _getHvacMode(entity) {
+    // Check hvac_action first (what it's actually doing), then fall back to state (what mode it's set to)
+    const action = entity.attributes.hvac_action;
+    const state = entity.state;
+    
+    // Priority: actual action over set mode
+    if (action === 'heating') return 'heating';
+    if (action === 'cooling') return 'cooling';
+    if (action === 'drying') return 'dry';
+    if (action === 'fan') return 'fan_only';
+    
+    // Fall back to state
+    if (state === 'heat') return 'heating';
+    if (state === 'cool') return 'cooling';
+    if (state === 'heat_cool' || state === 'auto') return 'heat_cool';
+    if (state === 'dry') return 'dry';
+    if (state === 'fan_only') return 'fan_only';
+    
+    return 'idle';
+  }
+
   _updateContent(entity) { 
     const card = this.shadowRoot.querySelector('.card'); 
     if (!card) return;
-    const isHeating = entity.attributes.hvac_action === 'heating' || entity.state === 'heat'; 
-    const isCooling = entity.attributes.hvac_action === 'cooling' || entity.state === 'cool';
+    
+    const mode = this._getHvacMode(entity);
+    const isActive = mode !== 'idle';
 
+    // Determine colors based on mode
     let start, end;
-    if (isHeating) {
-      start = this.config.heat_start || '#fb923c';
-      end = this.config.heat_end || '#f97316';
-    } else if (isCooling) {
-      start = this.config.cool_start || '#60a5fa';
-      end = this.config.cool_end || '#2563eb';
-    } else {
-      start = this.config.idle_start || '#374151';
-      end = this.config.idle_end || '#111827';
+    switch(mode) {
+      case 'heating':
+        start = this.config.heat_start || '#fb923c';
+        end = this.config.heat_end || '#f97316';
+        break;
+      case 'cooling':
+        start = this.config.cool_start || '#60a5fa';
+        end = this.config.cool_end || '#2563eb';
+        break;
+      case 'heat_cool':
+        start = this.config.heat_cool_start || '#a78bfa';
+        end = this.config.heat_cool_end || '#7c3aed';
+        break;
+      case 'dry':
+        start = this.config.dry_start || '#fbbf24';
+        end = this.config.dry_end || '#f59e0b';
+        break;
+      case 'fan_only':
+        start = this.config.fan_only_start || '#34d399';
+        end = this.config.fan_only_end || '#10b981';
+        break;
+      default:
+        start = this.config.idle_start || '#374151';
+        end = this.config.idle_end || '#111827';
     }
      
     card.style.background = `linear-gradient(135deg, ${start}, ${end})`; 
-    card.classList.toggle('is-active', isHeating || isCooling); 
+    card.classList.toggle('is-active', isActive); 
+
+    // Icon definitions with animations
+    const icons = {
+      heating: `<svg class="state-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M17.5,12A5.5,5.5 0 0,1 12,17.5A5.5,5.5 0 0,1 6.5,12C6.5,10.15 7.42,8.5 8.84,7.5C8.35,9.03 8.89,10.74 10.13,11.66C10.1,11.44 10.08,11.22 10.08,11C10.08,9.08 11.08,7.39 12.58,6.44C12.1,8.03 12.72,9.78 14.09,10.73C14.06,10.5 14.03,10.25 14.03,10C14.03,8.37 14.73,6.91 15.84,5.88C15.42,7.5 16.09,9.25 17.5,10.23V12M12,22A10,10 0 0,0 22,12C22,10.03 21.42,8.2 20.42,6.67C19.89,8.27 18.5,9.44 16.82,9.44C17.2,8.08 17,6.62 16.24,5.43C16.89,4 16.89,2.37 16.24,1C14.41,2.29 13.31,4.43 13.31,6.82C11.94,5.43 10,4.55 7.91,4.55C8.42,6.03 8.24,7.67 7.42,9C5.31,10.11 3.88,12.38 3.88,15A8.12,8.12 0 0,0 12,23.12V22Z" /></svg>`,
+      cooling: `<svg class="state-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M22,11H19.17L21,9.17L19.58,7.76L17.17,10.17L15,8V5H18V3H15V1H13V3H11V1H9V3H6V5H9V8L6.83,10.17L4.42,7.76L3,9.17L4.83,11H2V13H4.83L3,14.83L4.42,16.24L6.83,13.83L9,16V19H6V21H9V23H11V21H13V23H15V21H18V19H15V16L17.17,13.83L19.58,16.24L21,14.83L19.17,13H22V11M13,14V19H11V14H6.5L9,11.5L6.5,9H11V4H13V9H17.5L15,11.5L17.5,14H13Z" /></svg>`,
+      heat_cool: `<svg class="state-icon" viewBox="0 0 24 24" fill="currentColor" style="animation: pulse 2s infinite ease-in-out;"><path d="M12,2C10.73,2 9.6,2.8 9.18,4H3V6H4.95L2,14C1.53,16 3,17.45 5.5,18C8.5,18.55 9.5,19.5 9.5,21H14.5C14.5,19.5 15.5,18.55 18.5,18C21,17.45 22.47,16 22,14L19.05,6H21V4H14.82C14.4,2.8 13.27,2 12,2M12,4A1,1 0 0,1 13,5A1,1 0 0,1 12,6A1,1 0 0,1 11,5A1,1 0 0,1 12,4M5.05,6H18.95L21.9,14.12C22.03,14.82 21.63,15.5 20.73,15.84C17.35,17.06 16.39,18.25 16.14,19H7.86C7.61,18.25 6.65,17.06 3.27,15.84C2.37,15.5 1.97,14.82 2.1,14.12L5.05,6Z" /></svg>`,
+      dry: `<svg class="state-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12,2C15.31,2 18,4.66 18,7.95C18,12.41 12,19 12,19C12,19 6,12.41 6,7.95C6,4.66 8.69,2 12,2M12,4A3.94,3.94 0 0,0 8,7.95C8,11.14 11.63,16.07 12,16.58C12.37,16.07 16,11.14 16,7.95A3.94,3.94 0 0,0 12,4M14,17H10V22H14V17Z" /></svg>`,
+      fan_only: `<svg class="state-icon" viewBox="0 0 24 24" fill="currentColor" style="animation: spin 3s linear infinite;"><path d="M12,11A1,1 0 0,0 11,12A1,1 0 0,0 12,13A1,1 0 0,0 13,12A1,1 0 0,0 12,11M12.5,2C17,2 17.11,5.57 14.75,6.75C13.76,7.24 13.32,8.29 13.13,9.22C13.61,9.42 14.03,9.73 14.35,10.13C18.05,8.13 22.03,8.92 22.03,12.5C22.03,17 18.46,17.1 17.28,14.73C16.78,13.74 15.72,13.3 14.79,13.11C14.59,13.59 14.28,14 13.88,14.34C15.87,18.03 15.08,22 11.5,22C7,22 6.91,18.42 9.27,17.24C10.25,16.75 10.69,15.71 10.89,14.79C10.4,14.59 9.97,14.27 9.65,13.87C5.96,15.85 2,15.07 2,11.5C2,7 5.56,6.89 6.74,9.26C7.24,10.25 8.29,10.68 9.22,10.87C9.41,10.39 9.73,9.97 10.14,9.65C8.15,5.96 8.94,2 12.5,2Z" /></svg>`,
+      off: `<svg class="state-icon" viewBox="0 0 24 24" fill="currentColor" style="opacity: 0.5;"><path d="M16.56,5.44L15.11,6.89C16.84,7.94 18,9.83 18,12A6,6 0 0,1 12,18A6,6 0 0,1 6,12C6,9.83 7.16,7.94 8.88,6.88L7.44,5.44C5.36,6.88 4,9.28 4,12A8,8 0 0,0 12,20A8,8 0 0,0 20,12C20,9.28 18.64,6.88 16.56,5.44M13,3H11V13H13" /></svg>`
+    };
 
     const iconContainer = this.shadowRoot.querySelector('.icon-container');
-    const flameIcon = `<svg class="state-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M17.5,12A5.5,5.5 0 0,1 12,17.5A5.5,5.5 0 0,1 6.5,12C6.5,10.15 7.42,8.5 8.84,7.5C8.35,9.03 8.89,10.74 10.13,11.66C10.1,11.44 10.08,11.22 10.08,11C10.08,9.08 11.08,7.39 12.58,6.44C12.1,8.03 12.72,9.78 14.09,10.73C14.06,10.5 14.03,10.25 14.03,10C14.03,8.37 14.73,6.91 15.84,5.88C15.42,7.5 16.09,9.25 17.5,10.23V12M12,22A10,10 0 0,0 22,12C22,10.03 21.42,8.2 20.42,6.67C19.89,8.27 18.5,9.44 16.82,9.44C17.2,8.08 17,6.62 16.24,5.43C16.89,4 16.89,2.37 16.24,1C14.41,2.29 13.31,4.43 13.31,6.82C11.94,5.43 10,4.55 7.91,4.55C8.42,6.03 8.24,7.67 7.42,9C5.31,10.11 3.88,12.38 3.88,15A8.12,8.12 0 0,0 12,23.12V22Z" /></svg>`;
-    const snowflakeIcon = `<svg class="state-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M22,11H19.17L21,9.17L19.58,7.76L17.17,10.17L15,8V5H18V3H15V1H13V3H11V1H9V3H6V5H9V8L6.83,10.17L4.42,7.76L3,9.17L4.83,11H2V13H4.83L3,14.83L4.42,16.24L6.83,13.83L9,16V19H6V21H9V23H11V21H13V23H15V21H18V19H15V16L17.17,13.83L19.58,16.24L21,14.83L19.17,13H22V11M13,14V19H11V14H6.5L9,11.5L6.5,9H11V4H13V9H17.5L15,11.5L17.5,14H13Z" /></svg>`;
-    iconContainer.innerHTML = isHeating ? flameIcon : (isCooling ? snowflakeIcon : '');
+    // Show power icon when off, otherwise show mode-specific icon
+    const displayMode = entity.state === 'off' ? 'off' : mode;
+    iconContainer.innerHTML = icons[displayMode] || icons['off'];
+    
+    // Add click handler to icon to toggle thermostat power
+    const iconEl = iconContainer.querySelector('.state-icon');
+    if (iconEl) {
+      iconEl.style.cursor = 'pointer';
+      iconEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this._togglePower();
+      });
+    }
 
     const currentTempEl = this.shadowRoot.querySelector('.current-temp');
     const nameEl = this.shadowRoot.querySelector('.entity-name');
@@ -191,11 +305,20 @@ class CATThermostatCard extends HTMLElement {
     nameEl.textContent = this.config.name || entity.attributes.friendly_name; 
     nameEl.style.color = this.config.name_color || '#ffffff';
 
-    const hvacState = entity.state.charAt(0).toUpperCase() + entity.state.slice(1);
-    targetLabelEl.textContent = isHeating ? 'Heating to ' : (isCooling ? 'Cooling to ' : hvacState);
+    // Label text based on mode
+    const labels = {
+      heating: 'Heating to ',
+      cooling: 'Cooling to ',
+      heat_cool: 'Auto ',
+      dry: 'Drying ',
+      fan_only: 'Fan Only ',
+      idle: entity.state.charAt(0).toUpperCase() + entity.state.slice(1)
+    };
+    
+    targetLabelEl.textContent = labels[mode] || entity.state;
     targetLabelEl.style.color = this.config.target_label_color || '#ffffff';
 
-    const showTarget = isHeating || isCooling;
+    const showTarget = ['heating', 'cooling', 'heat_cool'].includes(mode);
     targetTempEl.textContent = showTarget ? (entity.attributes.temperature || 0).toFixed(1) + '°' : ''; 
     targetTempEl.style.color = this.config.target_temp_color || '#ffffff';
   } 
@@ -228,21 +351,42 @@ class CATThermostatCardEditor extends HTMLElement {
           <label style="display:block; margin-bottom:10px; font-weight:bold;">Background Colors</label> 
           <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
             <div>
-              <span style="font-size:10px; color:#fb923c">HEATING</span>
+              <span style="font-size:10px; color:#fb923c">🔥 HEATING</span>
               <div style="display:flex; gap:5px;">
                 <input id="heat-start" type="color" value="${this._config.heat_start || '#fb923c'}" style="width:100%; height:30px; border:none; background:none;">
                 <input id="heat-end" type="color" value="${this._config.heat_end || '#f97316'}" style="width:100%; height:30px; border:none; background:none;">
               </div>
             </div>
             <div>
-              <span style="font-size:10px; color:#60a5fa">COOLING</span>
+              <span style="font-size:10px; color:#60a5fa">❄️ COOLING</span>
               <div style="display:flex; gap:5px;">
                 <input id="cool-start" type="color" value="${this._config.cool_start || '#60a5fa'}" style="width:100%; height:30px; border:none; background:none;">
                 <input id="cool-end" type="color" value="${this._config.cool_end || '#2563eb'}" style="width:100%; height:30px; border:none; background:none;">
               </div>
             </div>
-            <div style="grid-column: span 2;">
-              <span style="font-size:10px; color:#9ca3af">IDLE / OTHER</span>
+            <div>
+              <span style="font-size:10px; color:#a78bfa">🔄 HEAT/COOL (AUTO)</span>
+              <div style="display:flex; gap:5px;">
+                <input id="heat-cool-start" type="color" value="${this._config.heat_cool_start || '#a78bfa'}" style="width:100%; height:30px; border:none; background:none;">
+                <input id="heat-cool-end" type="color" value="${this._config.heat_cool_end || '#7c3aed'}" style="width:100%; height:30px; border:none; background:none;">
+              </div>
+            </div>
+            <div>
+              <span style="font-size:10px; color:#fbbf24">💧 DRY</span>
+              <div style="display:flex; gap:5px;">
+                <input id="dry-start" type="color" value="${this._config.dry_start || '#fbbf24'}" style="width:100%; height:30px; border:none; background:none;">
+                <input id="dry-end" type="color" value="${this._config.dry_end || '#f59e0b'}" style="width:100%; height:30px; border:none; background:none;">
+              </div>
+            </div>
+            <div>
+              <span style="font-size:10px; color:#34d399">🌀 FAN ONLY</span>
+              <div style="display:flex; gap:5px;">
+                <input id="fan-only-start" type="color" value="${this._config.fan_only_start || '#34d399'}" style="width:100%; height:30px; border:none; background:none;">
+                <input id="fan-only-end" type="color" value="${this._config.fan_only_end || '#10b981'}" style="width:100%; height:30px; border:none; background:none;">
+              </div>
+            </div>
+            <div>
+              <span style="font-size:10px; color:#9ca3af">⏸️ IDLE / OFF</span>
               <div style="display:flex; gap:5px;">
                 <input id="idle-start" type="color" value="${this._config.idle_start || '#374151'}" style="width:100%; height:30px; border:none; background:none;">
                 <input id="idle-end" type="color" value="${this._config.idle_end || '#111827'}" style="width:100%; height:30px; border:none; background:none;">
@@ -281,6 +425,12 @@ class CATThermostatCardEditor extends HTMLElement {
     this.querySelector('#heat-end').addEventListener('input', (ev) => this._update('heat_end', ev.target.value)); 
     this.querySelector('#cool-start').addEventListener('input', (ev) => this._update('cool_start', ev.target.value)); 
     this.querySelector('#cool-end').addEventListener('input', (ev) => this._update('cool_end', ev.target.value)); 
+    this.querySelector('#heat-cool-start').addEventListener('input', (ev) => this._update('heat_cool_start', ev.target.value)); 
+    this.querySelector('#heat-cool-end').addEventListener('input', (ev) => this._update('heat_cool_end', ev.target.value)); 
+    this.querySelector('#dry-start').addEventListener('input', (ev) => this._update('dry_start', ev.target.value)); 
+    this.querySelector('#dry-end').addEventListener('input', (ev) => this._update('dry_end', ev.target.value)); 
+    this.querySelector('#fan-only-start').addEventListener('input', (ev) => this._update('fan_only_start', ev.target.value)); 
+    this.querySelector('#fan-only-end').addEventListener('input', (ev) => this._update('fan_only_end', ev.target.value)); 
     this.querySelector('#idle-start').addEventListener('input', (ev) => this._update('idle_start', ev.target.value)); 
     this.querySelector('#idle-end').addEventListener('input', (ev) => this._update('idle_end', ev.target.value)); 
     this.querySelector('#current-temp-color').addEventListener('input', (ev) => this._update('current_temp_color', ev.target.value)); 
@@ -303,6 +453,6 @@ window.customCards = window.customCards || [];
 window.customCards.push({ 
   type: 'cat-thermostat-card', 
   name: 'CAT Thermostat Card', 
-  description: 'Dynamic Thermostat card with standard Home Assistant sizing and 0.5° increments.', 
+  description: 'Dynamic Thermostat card with all HVAC modes, custom colors, animated icons, and 0.5° increments.', 
   preview: true, 
 });
