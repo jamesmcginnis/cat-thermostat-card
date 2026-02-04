@@ -292,13 +292,7 @@ class CATThermostatCard extends HTMLElement {
       const customIcon = this.config[customIconKey];
       
       if (customIcon) {
-        // Check if it's an MDI icon (starts with mdi:)
-        if (customIcon.startsWith('mdi:')) {
-          const iconName = customIcon.substring(4);
-          return `<ha-icon class="state-icon" icon="mdi:${iconName}" style="${animationStyle}"></ha-icon>`;
-        }
-        // Otherwise treat as URL to image
-        return `<img class="state-icon" src="${customIcon}" style="${animationStyle}" />`;
+        return `<ha-icon class="state-icon" icon="${customIcon}" style="${animationStyle}"></ha-icon>`;
       }
       
       // Return default icon
@@ -456,31 +450,81 @@ class CATThermostatCardEditor extends HTMLElement {
 
         <div style="border-top: 1px solid #444; padding-top: 10px;"> 
           <label style="display:block; margin-bottom:5px; font-weight:bold;">Custom Icons</label>
-          <p style="font-size:10px; color:#888; margin:0 0 10px 0;">Use MDI icons (e.g., "mdi:fire") or image URLs. Leave blank for defaults.</p>
+          <p style="font-size:10px; color:#888; margin:0 0 10px 0;">Select from popular MDI icons. Leave as "Default" to use built-in animated icons.</p>
           <div style="display:flex; flex-direction:column; gap:8px;">
             <div>
               <span style="font-size:10px; color:#fb923c;">🔥 HEATING ICON</span>
-              <input id="icon-heating" type="text" value="${this._config.icon_heating || ''}" placeholder="mdi:fire or image URL" style="width:100%; padding:6px; border-radius:4px; background:#222; color:white; border:1px solid #444; font-size:11px;">
+              <select id="icon-heating" style="width:100%; padding:6px; border-radius:4px; background:#222; color:white; border:1px solid #444; font-size:11px;">
+                <option value="">Default (Animated Flame)</option>
+                <option value="mdi:fire" ${this._config.icon_heating === 'mdi:fire' ? 'selected' : ''}>mdi:fire</option>
+                <option value="mdi:fireplace" ${this._config.icon_heating === 'mdi:fireplace' ? 'selected' : ''}>mdi:fireplace</option>
+                <option value="mdi:radiator" ${this._config.icon_heating === 'mdi:radiator' ? 'selected' : ''}>mdi:radiator</option>
+                <option value="mdi:sun-thermometer" ${this._config.icon_heating === 'mdi:sun-thermometer' ? 'selected' : ''}>mdi:sun-thermometer</option>
+                <option value="mdi:white-balance-sunny" ${this._config.icon_heating === 'mdi:white-balance-sunny' ? 'selected' : ''}>mdi:white-balance-sunny</option>
+                <option value="mdi:thermometer-chevron-up" ${this._config.icon_heating === 'mdi:thermometer-chevron-up' ? 'selected' : ''}>mdi:thermometer-chevron-up</option>
+                <option value="mdi:home-thermometer" ${this._config.icon_heating === 'mdi:home-thermometer' ? 'selected' : ''}>mdi:home-thermometer</option>
+              </select>
             </div>
             <div>
               <span style="font-size:10px; color:#60a5fa;">❄️ COOLING ICON</span>
-              <input id="icon-cooling" type="text" value="${this._config.icon_cooling || ''}" placeholder="mdi:snowflake or image URL" style="width:100%; padding:6px; border-radius:4px; background:#222; color:white; border:1px solid #444; font-size:11px;">
+              <select id="icon-cooling" style="width:100%; padding:6px; border-radius:4px; background:#222; color:white; border:1px solid #444; font-size:11px;">
+                <option value="">Default (Animated Snowflake)</option>
+                <option value="mdi:snowflake" ${this._config.icon_cooling === 'mdi:snowflake' ? 'selected' : ''}>mdi:snowflake</option>
+                <option value="mdi:snowflake-variant" ${this._config.icon_cooling === 'mdi:snowflake-variant' ? 'selected' : ''}>mdi:snowflake-variant</option>
+                <option value="mdi:air-conditioner" ${this._config.icon_cooling === 'mdi:air-conditioner' ? 'selected' : ''}>mdi:air-conditioner</option>
+                <option value="mdi:thermometer-chevron-down" ${this._config.icon_cooling === 'mdi:thermometer-chevron-down' ? 'selected' : ''}>mdi:thermometer-chevron-down</option>
+                <option value="mdi:weather-snowy" ${this._config.icon_cooling === 'mdi:weather-snowy' ? 'selected' : ''}>mdi:weather-snowy</option>
+                <option value="mdi:glacier" ${this._config.icon_cooling === 'mdi:glacier' ? 'selected' : ''}>mdi:glacier</option>
+              </select>
             </div>
             <div>
               <span style="font-size:10px; color:#a78bfa;">🔄 HEAT/COOL (AUTO) ICON</span>
-              <input id="icon-heat-cool" type="text" value="${this._config.icon_heat_cool || ''}" placeholder="mdi:autorenew or image URL" style="width:100%; padding:6px; border-radius:4px; background:#222; color:white; border:1px solid #444; font-size:11px;">
+              <select id="icon-heat-cool" style="width:100%; padding:6px; border-radius:4px; background:#222; color:white; border:1px solid #444; font-size:11px;">
+                <option value="">Default (Animated Hourglass)</option>
+                <option value="mdi:autorenew" ${this._config.icon_heat_cool === 'mdi:autorenew' ? 'selected' : ''}>mdi:autorenew</option>
+                <option value="mdi:sync" ${this._config.icon_heat_cool === 'mdi:sync' ? 'selected' : ''}>mdi:sync</option>
+                <option value="mdi:thermometer-auto" ${this._config.icon_heat_cool === 'mdi:thermometer-auto' ? 'selected' : ''}>mdi:thermometer-auto</option>
+                <option value="mdi:heat-wave" ${this._config.icon_heat_cool === 'mdi:heat-wave' ? 'selected' : ''}>mdi:heat-wave</option>
+                <option value="mdi:swap-vertical" ${this._config.icon_heat_cool === 'mdi:swap-vertical' ? 'selected' : ''}>mdi:swap-vertical</option>
+                <option value="mdi:thermostat-auto" ${this._config.icon_heat_cool === 'mdi:thermostat-auto' ? 'selected' : ''}>mdi:thermostat-auto</option>
+              </select>
             </div>
             <div>
               <span style="font-size:10px; color:#fbbf24;">💧 DRY ICON</span>
-              <input id="icon-dry" type="text" value="${this._config.icon_dry || ''}" placeholder="mdi:water-percent or image URL" style="width:100%; padding:6px; border-radius:4px; background:#222; color:white; border:1px solid #444; font-size:11px;">
+              <select id="icon-dry" style="width:100%; padding:6px; border-radius:4px; background:#222; color:white; border:1px solid #444; font-size:11px;">
+                <option value="">Default (Water Drop)</option>
+                <option value="mdi:water-percent" ${this._config.icon_dry === 'mdi:water-percent' ? 'selected' : ''}>mdi:water-percent</option>
+                <option value="mdi:water-off" ${this._config.icon_dry === 'mdi:water-off' ? 'selected' : ''}>mdi:water-off</option>
+                <option value="mdi:water-minus" ${this._config.icon_dry === 'mdi:water-minus' ? 'selected' : ''}>mdi:water-minus</option>
+                <option value="mdi:air-humidifier-off" ${this._config.icon_dry === 'mdi:air-humidifier-off' ? 'selected' : ''}>mdi:air-humidifier-off</option>
+                <option value="mdi:weather-sunny" ${this._config.icon_dry === 'mdi:weather-sunny' ? 'selected' : ''}>mdi:weather-sunny</option>
+                <option value="mdi:weather-sunset" ${this._config.icon_dry === 'mdi:weather-sunset' ? 'selected' : ''}>mdi:weather-sunset</option>
+              </select>
             </div>
             <div>
               <span style="font-size:10px; color:#34d399;">🌀 FAN ONLY ICON</span>
-              <input id="icon-fan-only" type="text" value="${this._config.icon_fan_only || ''}" placeholder="mdi:fan or image URL" style="width:100%; padding:6px; border-radius:4px; background:#222; color:white; border:1px solid #444; font-size:11px;">
+              <select id="icon-fan-only" style="width:100%; padding:6px; border-radius:4px; background:#222; color:white; border:1px solid #444; font-size:11px;">
+                <option value="">Default (Spinning Fan)</option>
+                <option value="mdi:fan" ${this._config.icon_fan_only === 'mdi:fan' ? 'selected' : ''}>mdi:fan</option>
+                <option value="mdi:fan-speed-1" ${this._config.icon_fan_only === 'mdi:fan-speed-1' ? 'selected' : ''}>mdi:fan-speed-1</option>
+                <option value="mdi:fan-speed-2" ${this._config.icon_fan_only === 'mdi:fan-speed-2' ? 'selected' : ''}>mdi:fan-speed-2</option>
+                <option value="mdi:fan-speed-3" ${this._config.icon_fan_only === 'mdi:fan-speed-3' ? 'selected' : ''}>mdi:fan-speed-3</option>
+                <option value="mdi:wind-turbine" ${this._config.icon_fan_only === 'mdi:wind-turbine' ? 'selected' : ''}>mdi:wind-turbine</option>
+                <option value="mdi:weather-windy" ${this._config.icon_fan_only === 'mdi:weather-windy' ? 'selected' : ''}>mdi:weather-windy</option>
+                <option value="mdi:air-filter" ${this._config.icon_fan_only === 'mdi:air-filter' ? 'selected' : ''}>mdi:air-filter</option>
+              </select>
             </div>
             <div>
               <span style="font-size:10px; color:#9ca3af;">⏸️ OFF/POWER ICON</span>
-              <input id="icon-off" type="text" value="${this._config.icon_off || ''}" placeholder="mdi:power or image URL" style="width:100%; padding:6px; border-radius:4px; background:#222; color:white; border:1px solid #444; font-size:11px;">
+              <select id="icon-off" style="width:100%; padding:6px; border-radius:4px; background:#222; color:white; border:1px solid #444; font-size:11px;">
+                <option value="">Default (Power Symbol)</option>
+                <option value="mdi:power" ${this._config.icon_off === 'mdi:power' ? 'selected' : ''}>mdi:power</option>
+                <option value="mdi:power-off" ${this._config.icon_off === 'mdi:power-off' ? 'selected' : ''}>mdi:power-off</option>
+                <option value="mdi:power-standby" ${this._config.icon_off === 'mdi:power-standby' ? 'selected' : ''}>mdi:power-standby</option>
+                <option value="mdi:stop-circle" ${this._config.icon_off === 'mdi:stop-circle' ? 'selected' : ''}>mdi:stop-circle</option>
+                <option value="mdi:sleep" ${this._config.icon_off === 'mdi:sleep' ? 'selected' : ''}>mdi:sleep</option>
+                <option value="mdi:cancel" ${this._config.icon_off === 'mdi:cancel' ? 'selected' : ''}>mdi:cancel</option>
+              </select>
             </div>
           </div>
         </div> 
@@ -505,12 +549,12 @@ class CATThermostatCardEditor extends HTMLElement {
     this.querySelector('#name-color').addEventListener('input', (ev) => this._update('name_color', ev.target.value)); 
     this.querySelector('#target-label-color').addEventListener('input', (ev) => this._update('target_label_color', ev.target.value)); 
     this.querySelector('#target-temp-color').addEventListener('input', (ev) => this._update('target_temp_color', ev.target.value)); 
-    this.querySelector('#icon-heating').addEventListener('input', (ev) => this._update('icon_heating', ev.target.value)); 
-    this.querySelector('#icon-cooling').addEventListener('input', (ev) => this._update('icon_cooling', ev.target.value)); 
-    this.querySelector('#icon-heat-cool').addEventListener('input', (ev) => this._update('icon_heat_cool', ev.target.value)); 
-    this.querySelector('#icon-dry').addEventListener('input', (ev) => this._update('icon_dry', ev.target.value)); 
-    this.querySelector('#icon-fan-only').addEventListener('input', (ev) => this._update('icon_fan_only', ev.target.value)); 
-    this.querySelector('#icon-off').addEventListener('input', (ev) => this._update('icon_off', ev.target.value)); 
+    this.querySelector('#icon-heating').addEventListener('change', (ev) => this._update('icon_heating', ev.target.value)); 
+    this.querySelector('#icon-cooling').addEventListener('change', (ev) => this._update('icon_cooling', ev.target.value)); 
+    this.querySelector('#icon-heat-cool').addEventListener('change', (ev) => this._update('icon_heat_cool', ev.target.value)); 
+    this.querySelector('#icon-dry').addEventListener('change', (ev) => this._update('icon_dry', ev.target.value)); 
+    this.querySelector('#icon-fan-only').addEventListener('change', (ev) => this._update('icon_fan_only', ev.target.value)); 
+    this.querySelector('#icon-off').addEventListener('change', (ev) => this._update('icon_off', ev.target.value)); 
   } 
 
   _update(key, value) { 
