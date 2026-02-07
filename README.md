@@ -4,6 +4,10 @@ A beautiful, dynamic thermostat card for Home Assistant with animated HVAC mode 
 
 ![CAT Thermostat Card Preview](preview.png)
 
+*Visual editor with full customization options:*
+
+![CAT Thermostat Card Editor](editor.png)
+
 ## Features
 
 - **Complete HVAC Mode Support**: Heating, Cooling, Heat/Cool (Auto), Dry, Fan Only, and Off states
