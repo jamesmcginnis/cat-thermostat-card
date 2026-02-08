@@ -227,6 +227,7 @@ class CATThermostatCard extends HTMLElement {
     if (action === 'cooling') return 'cooling';
     if (action === 'drying') return 'dry';
     if (action === 'fan') return 'fan_only';
+    if (action === 'idle') return 'idle';
     
     // Fall back to state
     if (state === 'heat') return 'heating';
