@@ -10,129 +10,65 @@ A beautiful, dynamic thermostat card for Home Assistant with animated HVAC mode 
 
 ## ✨ Key Features
 
-- 🔥 **Complete HVAC Mode Support** - Heating, Cooling, Heat/Cool (Auto), Dry, Fan Only, and Off states
-- 🎬 **Animated Mode Indicators** - Dynamic icons that breathe, pulse, or spin based on active mode
-- 🔌 **Click-to-Toggle Power** - Click any animated icon to instantly turn the thermostat on or off
-- 🎨 **Dynamic Gradients** - Smooth color transitions for each HVAC mode with fully customizable colors
-- 🎯 **Manual Controls** - Quick +/- buttons to adjust temperature by 0.5° increments
-- 🖼️ **Custom Icon Support** - Choose from popular Material Design Icons for each mode
-- 🖌️ **Fully Customizable** - Configure all colors including 6 gradient pairs and 4 text elements
-- 📱 **Responsive Design** - Clean, compact layout that fits perfectly in your dashboard
-- ⚙️ **Visual Editor** - Easy-to-use configuration interface within Home Assistant
+- 🔥 **Complete HVAC Mode Support** - Heating, Cooling, Heat/Cool (Auto), Dry, Fan Only, and Off states.
+- 🎬 **Animated Mode Indicators** - Native SVG icons that breathe, pulse, or spin based on active equipment status.
+- 🔌 **Click-to-Toggle Power** - Click the animated icon to instantly toggle the thermostat on or off.
+- 🎨 **Dynamic Gradients** - 135° smooth color transitions for each HVAC mode with fully customizable start/end colors.
+- 🎯 **Manual Controls** - Precision +/- buttons to adjust temperature by 0.5° increments.
+- 🖼️ **Custom Icon Support** - Choose from popular Material Design Icons (MDI) for each mode or use built-in animations.
+- 🖌️ **Glassmorphism UI** - Translucent control buttons that adapt perfectly to any chosen gradient background.
+- ⚙️ **Visual Editor** - Advanced tabbed configuration interface (General, Colors, Icons) within Home Assistant.
 
 ## 🖼️ Visual States
 
-The card features six distinct HVAC mode states with unique animations:
+The card features six distinct states with unique animations that react to your HVAC's `hvac_action` and `state`:
 
-| Mode | Icon | Animation | Color |
+| Mode | Icon | Animation | Background Style |
 |------|------|-----------|-------|
 | **Heating** | 🔥 Flame | Breathing | Orange gradient |
 | **Cooling** | ❄️ Snowflake | Breathing | Blue gradient |
-| **Heat/Cool (Auto)** | ⏳ Hourglass | Pulsing | Purple gradient |
+| **Heat/Cool (Auto)** | 🔄 Hourglass | Pulsing | Purple gradient |
 | **Dry** | 💧 Water Drop | Breathing | Amber gradient |
 | **Fan Only** | 🌀 Fan | Spinning | Green gradient |
 | **Off** | ⏸️ Power | Static (dimmed) | Gray gradient |
 
-Each state includes:
-- Large current temperature display (customizable color)
-- Entity name label (customizable color)
-- Target temperature with contextual label (customizable colors)
-- Temperature adjustment controls (+/- buttons in 0.5° increments)
-- Clickable animated icon for power toggle
-
 ## 🎨 Customization Options
 
-Every visual element is fully customizable through the visual editor:
+Every visual element is fully customizable through the tabbed visual editor:
 
-**Background Gradients (6 modes)**
-- Heating state colors (start & end)
-- Cooling state colors (start & end)
-- Heat/Cool (Auto) state colors (start & end)
-- Dry mode colors (start & end)
-- Fan Only mode colors (start & end)
-- Idle/Off state colors (start & end)
+**Background Gradients**
+- Unique start and end hex colors for all 6 HVAC modes.
+- Real-time preview bars in the editor.
 
-**Text Colors (4 elements)**
-- Current temperature
-- Entity name
-- Target label text
-- Target temperature
+**Typography & UI Colors**
+- Current temperature, Entity name, Target label, and Target temperature colors.
+- **Button Colors:** Set the base color for +/− buttons (rendered at 25% opacity for a glassy look).
+- **Icon Color:** Global color override for the mode indicator.
 
-**Custom Icons (6 modes)**
-- Heating icon (dropdown with popular MDI icons)
-- Cooling icon (dropdown with popular MDI icons)
-- Heat/Cool (Auto) icon (dropdown with popular MDI icons)
-- Dry mode icon (dropdown with popular MDI icons)
-- Fan Only icon (dropdown with popular MDI icons)
-- Off/Power icon (dropdown with popular MDI icons)
-
-Leave any icon as "Default" to use the built-in animated SVG icons.
+**Custom Icons**
+- Dropdown selectors for each mode with popular MDI alternatives.
+- Leave as "Default" to enjoy the custom-coded animated SVGs.
 
 ## 🎮 Interactive Controls
 
-- **Click the card** - Opens the more-info dialog for detailed controls
-- **Click the animated icon** - Toggles the thermostat on/off
-- **Plus button** - Increases temperature by 0.5°
-- **Minus button** - Decreases temperature by 0.5°
+- **Click the card body** - Opens the standard `more-info` dialog.
+- **Click the animated icon** - Toggles power. Smart logic turns the unit on to `auto`, `heat_cool`, or `heat` depending on availability.
+- **Plus/Minus buttons** - Adjusts target temperature by 0.5°.
 
 ## 📋 Requirements
 
-- Home Assistant 2023.x or newer
-- Any `climate` entity (thermostat, HVAC system, AC unit, radiator, etc.)
-- Supports all HVAC modes: heat, cool, heat_cool, auto, dry, fan_only, off
-- Compatible with Material Design Icons (MDI)
+- Home Assistant 2023.x or newer.
+- Any `climate` entity.
+- Support for standard services: `set_temperature`, `set_hvac_mode`, and `turn_off`.
 
-## 🚀 Quick Start
+## 🆕 What's New
 
-1. Install via HACS or manually
-2. Add card to your dashboard
-3. Select your climate entity from the dropdown
-4. Customize colors, icons, and appearance as desired
-5. Enjoy beautiful, animated climate control!
-
-## 💡 Use Cases
-
-Perfect for:
-- Multi-mode HVAC systems with heat, cool, and auto capabilities
-- Central heating/cooling thermostats
-- Individual room radiators with TRVs
-- Air conditioning units with dry and fan modes
-- Mini-split systems with heat pump functionality
-- Smart thermostats with multiple operating modes
-- Zone climate control systems
-- Any `climate` entity in Home Assistant
-
-## 🎯 Design Philosophy
-
-This card prioritizes:
-- **Visual Clarity** - Instant understanding of current HVAC mode and activity
-- **Quick Access** - Common actions (temperature adjustment, power toggle) right on the card
-- **Mode Awareness** - Animated icons and color-coded backgrounds for each operating mode
-- **Aesthetic Appeal** - Smooth animations, modern gradients, and polished UI
-- **Flexibility** - Adapts to any color scheme, supports custom icons, and fits any dashboard design
-- **Complete Control** - Support for all standard HVAC modes without compromise
-
-## 🔧 Technical Details
-
-- Built with Web Components (Custom Elements) and Shadow DOM
-- Smooth CSS transitions and animations (breathing, pulsing, spinning)
-- Intelligent state detection (prioritizes `hvac_action` over `state`)
-- Event-based interaction model with proper event bubbling
-- Responsive to entity attribute changes in real-time
-- Visual editor built with Home Assistant's configuration framework
-- 0.5° temperature increment support for precise control
-- Smart power toggle logic (turns on to preferred auto/heat_cool mode)
-
-## 🆕 What's New in v2.0.0
-
-- ✅ Added support for all HVAC modes (Heat/Cool, Dry, Fan Only)
-- ✅ Implemented click-to-toggle power functionality on animated icons
-- ✅ Added custom icon selection with dropdown selectors
-- ✅ Enhanced visual editor with icon customization options
-- ✅ Added mode-specific animations (breathing, pulsing, spinning)
-- ✅ Improved state detection logic (hvac_action priority)
-- ✅ Added 6 gradient color pairs for complete mode coverage
-- ✅ Expanded icon library with popular MDI icon options
+- ✅ **Advanced Visual Editor:** New tabbed UI for a cleaner configuration experience.
+- ✅ **Full Mode Coverage:** Added dedicated support for Dry and Fan Only modes.
+- ✅ **Power Toggle:** Added the ability to turn the thermostat on/off by clicking the icon.
+- ✅ **Glassmorphism:** Buttons now feature a translucent glass effect.
+- ✅ **Enhanced Animations:** Added CSS-based spinning and pulsing animations.
+- ✅ **Icon Overrides:** Full MDI icon support via the visual editor.
 
 ## 📄 License
 
