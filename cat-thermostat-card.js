@@ -39,6 +39,8 @@ class CATThermostatCard extends HTMLElement {
       // Button colours
       btn_bg_color:   '#ffffff',
       btn_icon_color: '#ffffff',
+      // Show +/- controls
+      show_controls: true,
       // Custom icons (empty = use built-in animated SVG)
       icon_heating:   '',
       icon_cooling:   '',
@@ -264,6 +266,12 @@ class CATThermostatCard extends HTMLElement {
     ];
     card.style.background = `linear-gradient(135deg, ${start}, ${end})`;
     card.classList.toggle('is-active', isActive);
+
+    // ── Show / hide +/- controls ────────────────────────────────────
+    const controlsEl = this.shadowRoot.querySelector('.controls');
+    if (controlsEl) {
+      controlsEl.style.display = (this.config.show_controls === false) ? 'none' : 'flex';
+    }
 
     // ── Button colours ──────────────────────────────────────────────
     const btnBg   = this.config.btn_bg_color   || '#ffffff';
@@ -517,6 +525,55 @@ class CATThermostatCardEditor extends HTMLElement {
           border-color: var(--primary-color, #6366f1);
         }
 
+        /* ─ Toggle row ─ */
+        .toggle-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 4px 0 2px;
+        }
+        .toggle-label {
+          font-size: 12px;
+          font-weight: 600;
+        }
+        .toggle-switch {
+          position: relative;
+          width: 40px;
+          height: 22px;
+          flex-shrink: 0;
+        }
+        .toggle-switch input {
+          opacity: 0;
+          width: 0;
+          height: 0;
+          position: absolute;
+        }
+        .toggle-track {
+          position: absolute;
+          inset: 0;
+          border-radius: 22px;
+          background: var(--divider-color, #3a3a3a);
+          cursor: pointer;
+          transition: background 0.2s;
+        }
+        .toggle-track::after {
+          content: '';
+          position: absolute;
+          left: 3px;
+          top: 3px;
+          width: 16px;
+          height: 16px;
+          border-radius: 50%;
+          background: #fff;
+          transition: transform 0.2s;
+        }
+        .toggle-switch input:checked + .toggle-track {
+          background: var(--primary-color, #6366f1);
+        }
+        .toggle-switch input:checked + .toggle-track::after {
+          transform: translateX(18px);
+        }
+
         /* ─ Gradient rows ─ */
         .grad-group { margin-bottom: 12px; }
         .grad-group:last-child { margin-bottom: 0; }
@@ -667,6 +724,18 @@ class CATThermostatCardEditor extends HTMLElement {
                    value="${c.name || ''}" placeholder="e.g. Living Room">
           </div>
         </div>
+
+        <div class="section">
+          <div class="section-title">Controls</div>
+          <div class="toggle-row">
+            <span class="toggle-label">➕ Show +/− Buttons</span>
+            <label class="toggle-switch">
+              <input id="show-controls-toggle" type="checkbox"
+                     ${c.show_controls === false ? '' : 'checked'}>
+              <span class="toggle-track"></span>
+            </label>
+          </div>
+        </div>
       </div>
 
       <!-- ══════════ COLORS PANEL ══════════ -->
@@ -784,6 +853,10 @@ class CATThermostatCardEditor extends HTMLElement {
       .addEventListener('change', ev => this._update('entity', ev.target.value));
     this.querySelector('#name-input')
       .addEventListener('input',  ev => this._update('name',   ev.target.value));
+
+    // Show controls toggle
+    this.querySelector('#show-controls-toggle')
+      .addEventListener('change', ev => this._update('show_controls', ev.target.checked));
 
     // All data-key inputs (colours + icon selects)
     this.querySelectorAll('[data-key]').forEach(el => {
