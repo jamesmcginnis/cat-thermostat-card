@@ -1,4 +1,4 @@
-* =====================================================================
+/* =====================================================================
    CAT Thermostat Card  –  Home Assistant Custom Card
    ===================================================================== */
 
@@ -362,8 +362,10 @@ class CATThermostatCard extends HTMLElement {
 class CATThermostatCardEditor extends HTMLElement {
 
   setConfig(config) {
-    this._config      = config || {};
-    this._initialized = false;
+    this._config = config || {};
+    // If already rendered, just update the stored config without re-rendering.
+    // Re-rendering would destroy the focused input after every keystroke.
+    if (this._initialized) return;
     if (this._hass) this._render();
   }
 
