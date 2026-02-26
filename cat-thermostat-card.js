@@ -52,7 +52,6 @@ icon_heat_cool: ‘’,
 icon_dry:       ‘’,
 icon_fan_only:  ‘’,
 icon_off:       ‘’,
-icon_idle:      ‘’,
 };
 }
 
@@ -331,9 +330,7 @@ if (!idleDisplay) {
   animStyle = 'opacity:0.45;';
 }
 
-// When idle, prefer icon_idle if set; otherwise fall back to displayMode icon
-const idleKey    = (mode === 'idle' && !idleDisplay) ? 'icon_idle' : null;
-const customIcon = (idleKey && this.config[idleKey]) || this.config[`icon_${displayMode}`];
+const customIcon = this.config[`icon_${displayMode}`];
 const iconHtml   = customIcon
   ? `<ha-icon class="state-icon" icon="${customIcon}" style="${animStyle}"></ha-icon>`
   : (defaultIcons[displayMode] || defaultIcons.off);
@@ -460,13 +457,6 @@ const iconRow = (emoji, title, key, placeholder, opts) => `
   </div>`;
 
 // ── Full HTML ─────────────────────────────────────────────────────
-
-// Pre-build power-on mode options (no IIFE inside template literal)
-const _ml = { heat:'Heat', cool:'Cool', heat_cool:'Heat/Cool', auto:'Auto', dry:'Dry', fan_only:'Fan Only' };
-const _em = (c.entity && hs[c.entity] && hs[c.entity].attributes.hvac_modes)
-  ? hs[c.entity].attributes.hvac_modes.filter(m => m !== 'off')
-  : Object.keys(_ml);
-const modeOptions = _em.map(m => '<option value="' + m + '"' + (c.power_on_mode===m?' selected':'') + '>' + (_ml[m]||m) + '</option>').join('');
 
 this.innerHTML = `
   <style>
@@ -791,7 +781,13 @@ this.innerHTML = `
         </label>
         <select id="power-on-mode-select" class="sel">
           <option value="">Auto - use best available</option>
-          ${modeOptions}
+          ${(() => {
+            const ml = { heat:'Heat', cool:'Cool', heat_cool:'Heat/Cool', auto:'Auto', dry:'Dry', fan_only:'Fan Only' };
+            const em = (c.entity && hs[c.entity] && hs[c.entity].attributes.hvac_modes)
+              ? hs[c.entity].attributes.hvac_modes.filter(m => m !== 'off')
+              : Object.keys(ml);
+            return em.map(m => '<option value="' + m + '"' + (c.power_on_mode===m?' selected':'') + '>' + (ml[m]||m) + '</option>').join('');
+          })()}
         </select>
       </div>
     </div>
@@ -886,16 +882,6 @@ this.innerHTML = `
         ['mdi:stop-circle',   'mdi:stop-circle'],
         ['mdi:sleep',         'mdi:sleep'],
         ['mdi:cancel',        'mdi:cancel'],
-      ])}
-      ${iconRow('💤','Idle (reached temp)','icon_idle', 'Default — same as Off/Power icon', [
-        ['mdi:thermometer-check',   'mdi:thermometer-check'],
-        ['mdi:thermometer-lines',   'mdi:thermometer-lines'],
-        ['mdi:check-circle-outline','mdi:check-circle-outline'],
-        ['mdi:clock-outline',       'mdi:clock-outline'],
-        ['mdi:leaf',                'mdi:leaf'],
-        ['mdi:sleep',               'mdi:sleep'],
-        ['mdi:pause-circle-outline','mdi:pause-circle-outline'],
-        ['mdi:home-thermometer',    'mdi:home-thermometer'],
       ])}
     </div>
   </div>
