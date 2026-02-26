@@ -1,5 +1,5 @@
 /* =====================================================================
-CAT Thermostat Card  –  Home Assistant Custom Card
+CAT Thermostat Card  –  Home Assistant Custom Card 
 ===================================================================== */
 
 class CATThermostatCard extends HTMLElement {
