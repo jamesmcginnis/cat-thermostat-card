@@ -41,8 +41,6 @@ class CATThermostatCard extends HTMLElement {
       btn_icon_color: '#ffffff',
       // Show +/- controls
       show_controls: true,
-      // HVAC mode to activate when powering on via the card icon
-      power_on_mode: '',
       // Custom icons (empty = use built-in animated SVG)
       icon_heating:   '',
       icon_cooling:   '',
@@ -210,20 +208,13 @@ class CATThermostatCard extends HTMLElement {
   _togglePower() {
     const entity = this._hass.states[this.config.entity];
     if (entity.state === 'off') {
-      const modes    = entity.attributes.hvac_modes || [];
-      const preferred = this.config.power_on_mode;
-      let target;
-      // Use the configured preference if it's supported by this entity
-      if (preferred && modes.includes(preferred)) {
-        target = preferred;
-      } else {
-        // Fallback: pick the most capable available mode
-        if      (modes.includes('auto'))      target = 'auto';
-        else if (modes.includes('heat_cool')) target = 'heat_cool';
-        else if (modes.includes('heat'))      target = 'heat';
-        else if (modes.includes('cool'))      target = 'cool';
-        else if (modes.length > 1)            target = modes.find(m => m !== 'off') || modes[0];
-      }
+      const modes = entity.attributes.hvac_modes || [];
+      let target = 'heat_cool';
+      if      (modes.includes('auto'))      target = 'auto';
+      else if (modes.includes('heat_cool')) target = 'heat_cool';
+      else if (modes.includes('heat'))      target = 'heat';
+      else if (modes.includes('cool'))      target = 'cool';
+      else if (modes.length > 1)            target = modes.find(m => m !== 'off') || modes[0];
       this._hass.callService('climate', 'set_hvac_mode', {
         entity_id: this.config.entity,
         hvac_mode: target,
@@ -746,33 +737,6 @@ class CATThermostatCardEditor extends HTMLElement {
               <span class="toggle-track"></span>
             </label>
           </div>
-          <hr class="sub-divider">
-          <div class="field">
-            <label class="field-label">
-              ⚡ Power On Mode
-              <span class="field-hint">(mode activated when turning on)</span>
-            </label>
-            <select id="power-on-mode-select" class="sel">
-              <option value="">🔀 Auto — use best available</option>
-              ${(() => {
-                const modeLabels = {
-                  heat:      '🔥 Heat',
-                  cool:      '❄️ Cool',
-                  heat_cool: '🔄 Heat / Cool',
-                  auto:      '🔄 Auto',
-                  dry:       '💧 Dry',
-                  fan_only:  '🌀 Fan Only',
-                };
-                // Show only modes the chosen entity actually supports; fall back to all known modes
-                const entityModes = (c.entity && hs[c.entity])
-                  ? (hs[c.entity].attributes.hvac_modes || []).filter(m => m !== 'off')
-                  : Object.keys(modeLabels);
-                return entityModes
-                  .map(m => `<option value="${m}" ${c.power_on_mode === m ? 'selected' : ''}>${modeLabels[m] || m}</option>`)
-                  .join('');
-              })()}
-            </select>
-          </div>
         </div>
       </div>
 
@@ -895,10 +859,6 @@ class CATThermostatCardEditor extends HTMLElement {
     // Show controls toggle
     this.querySelector('#show-controls-toggle')
       .addEventListener('change', ev => this._update('show_controls', ev.target.checked));
-
-    // Power on mode select
-    this.querySelector('#power-on-mode-select')
-      .addEventListener('change', ev => this._update('power_on_mode', ev.target.value));
 
     // All data-key inputs (colours + icon selects)
     this.querySelectorAll('[data-key]').forEach(el => {
