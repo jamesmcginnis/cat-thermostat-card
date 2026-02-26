@@ -41,11 +41,7 @@ btn_bg_color:   ‘#ffffff’,
 btn_icon_color: ‘#ffffff’,
 // Show +/- controls
 show_controls: true,
-// HVAC mode to activate when powering on via the card icon
 power_on_mode: ‘’,
-// Icon shown when thermostat is on but idle:
-//   ‘power’ = power/off icon (original behaviour)
-//   ‘mode’  = dimmed mode icon; power icon only when entity is truly off
 idle_icon: ‘power’,
 // Custom icons (empty = use built-in animated SVG)
 icon_heating:   ‘’,
@@ -213,21 +209,19 @@ temperature: newTemp,
 _togglePower() {
 const entity = this._hass.states[this.config.entity];
 if (entity.state === ‘off’) {
-const modes    = entity.attributes.hvac_modes || [];
+const modes = entity.attributes.hvac_modes || [];
 const preferred = this.config.power_on_mode;
 let target;
-// Use the configured preference if it’s supported by this entity
 if (preferred && modes.includes(preferred)) {
 target = preferred;
 } else {
-// Fallback: pick the most capable available mode
 if      (modes.includes(‘auto’))      target = ‘auto’;
 else if (modes.includes(‘heat_cool’)) target = ‘heat_cool’;
 else if (modes.includes(‘heat’))      target = ‘heat’;
 else if (modes.includes(‘cool’))      target = ‘cool’;
 else if (modes.length > 1)            target = modes.find(m => m !== ‘off’) || modes[0];
 }
-if (!target) return; // no usable mode found — do nothing safely
+if (!target) return;
 this._hass.callService(‘climate’, ‘set_hvac_mode’, {
 entity_id: this.config.entity,
 hvac_mode: target,
@@ -317,40 +311,23 @@ const defaultIcons = {
   off:       `<svg class="state-icon" viewBox="0 0 24 24" fill="currentColor" style="opacity:0.5"><path d="M16.56,5.44L15.11,6.89C16.84,7.94 18,9.83 18,12A6,6 0 0,1 12,18A6,6 0 0,1 6,12C6,9.83 7.16,7.94 8.88,6.88L7.44,5.44C5.36,6.88 4,9.28 4,12A8,8 0 0,0 12,20A8,8 0 0,0 20,12C20,9.28 18.64,6.88 16.56,5.44M13,3H11V13H13"/></svg>`,
 };
 
-// ── Resolve which icon to show ───────────────────────────────────
-// 'power' mode (default): show power/off icon whenever idle or off
-// 'mode'  mode           : show power icon only when entity.state === 'off';
-//                          when on-but-idle show the HVAC mode icon, dimmed
 let displayMode;
-let idleDisplay = false; // true when showing a mode icon in idle state
-
+let idleDisplay = false;
 if (entity.state === 'off') {
   displayMode = 'off';
 } else if (mode === 'idle' && this.config.idle_icon === 'mode') {
-  // Map entity hvac_mode → icon key
-  const stateToIcon = {
-    heat:      'heating',
-    cool:      'cooling',
-    heat_cool: 'heat_cool',
-    auto:      'heat_cool',
-    dry:       'dry',
-    fan_only:  'fan_only',
-  };
-  displayMode  = stateToIcon[entity.state] || 'off';
-  idleDisplay  = true;
+  const stateToIcon = { heat: 'heating', cool: 'cooling', heat_cool: 'heat_cool', auto: 'heat_cool', dry: 'dry', fan_only: 'fan_only' };
+  displayMode = stateToIcon[entity.state] || 'off';
+  idleDisplay = true;
 } else {
-  // 'power' behaviour: idle falls through to off icon (no key in defaultIcons)
-  displayMode = mode; // 'idle' → defaultIcons fallback = off icon
+  displayMode = mode;
 }
-
 let animStyle = '';
 if (!idleDisplay) {
-  // Full animations only when actively running
   if (displayMode === 'heat_cool') animStyle = 'animation:pulse 2s infinite ease-in-out;';
   if (displayMode === 'fan_only')  animStyle = 'animation:spin 3s linear infinite;';
   if (displayMode === 'off')       animStyle = 'opacity:0.5;';
 } else {
-  // Idle-but-on: dim the icon slightly so it's clearly not active
   animStyle = 'opacity:0.45;';
 }
 
@@ -481,6 +458,15 @@ const iconRow = (emoji, title, key, placeholder, opts) => `
   </div>`;
 
 // ── Full HTML ─────────────────────────────────────────────────────
+
+// Pre-compute Power On Mode options (avoids IIFE inside template literal)
+const powerOnModeLabels = { heat: 'Heat', cool: 'Cool', heat_cool: 'Heat / Cool', auto: 'Auto', dry: 'Dry', fan_only: 'Fan Only' };
+const entityModes = (c.entity && hs[c.entity] && hs[c.entity].attributes.hvac_modes)
+  ? hs[c.entity].attributes.hvac_modes.filter(m => m !== 'off')
+  : Object.keys(powerOnModeLabels);
+const powerOnModeOptions = entityModes
+  .map(m => `<option value="${m}"${c.power_on_mode === m ? ' selected' : ''}>${powerOnModeLabels[m] || m}</option>`)
+  .join('');
 
 this.innerHTML = `
   <style>
@@ -743,13 +729,19 @@ this.innerHTML = `
       border-top: 1px dashed var(--divider-color, #2d2d2d);
       margin: 10px 0;
     }
+    /* - Divider within a section - */
+    .sub-divider {
+      border: none;
+      border-top: 1px dashed var(--divider-color, #2d2d2d);
+      margin: 10px 0;
+    }
   </style>
 
   <!-- ════ Tab bar ════ -->
   <div class="tabs">
     <button class="tab active" data-tab="general">⚙️ General</button>
-    <button class="tab" data-tab="colors">🎨 Colors</button>
-    <button class="tab" data-tab="icons">🔧 Icons</button>
+    <button class="tab" data-tab="colors"> Colors</button>
+    <button class="tab" data-tab="icons"> Icons</button>
   </div>
 
   <!-- ══════════ GENERAL PANEL ══════════ -->
@@ -791,39 +783,23 @@ this.innerHTML = `
       <hr class="sub-divider">
       <div class="field">
         <label class="field-label">
-          🔘 Idle Icon Behaviour
-          <span class="field-hint">(what to show when on but not running)</span>
+          Idle Icon
+          <span class="field-hint">(when on but not running)</span>
         </label>
         <select id="idle-icon-select" class="sel">
-          <option value="power"  ${(c.idle_icon || 'power') === 'power' ? 'selected' : ''}>⏻ Power icon — same as off (original)</option>
-          <option value="mode"   ${c.idle_icon === 'mode'               ? 'selected' : ''}>🔅 Mode icon — dimmed; power icon only when truly off</option>
+          <option value="power" ${(c.idle_icon || 'power') === 'power' ? 'selected' : ''}>Power icon - same as off</option>
+          <option value="mode"  ${c.idle_icon === 'mode' ? 'selected' : ''}>Mode icon dimmed - power only when truly off</option>
         </select>
       </div>
       <hr class="sub-divider">
       <div class="field">
         <label class="field-label">
-          ⚡ Power On Mode
+          Power On Mode
           <span class="field-hint">(mode activated when turning on)</span>
         </label>
         <select id="power-on-mode-select" class="sel">
-          <option value="">🔀 Auto — use best available</option>
-          ${(() => {
-            const modeLabels = {
-              heat:      '🔥 Heat',
-              cool:      '❄️ Cool',
-              heat_cool: '🔄 Heat / Cool',
-              auto:      '🔄 Auto',
-              dry:       '💧 Dry',
-              fan_only:  '🌀 Fan Only',
-            };
-            // Show only modes the chosen entity actually supports; fall back to all known modes
-            const entityModes = (c.entity && hs[c.entity])
-              ? (hs[c.entity].attributes.hvac_modes || []).filter(m => m !== 'off')
-              : Object.keys(modeLabels);
-            return entityModes
-              .map(m => `<option value="${m}" ${c.power_on_mode === m ? 'selected' : ''}>${modeLabels[m] || m}</option>`)
-              .join('');
-          })()}
+          <option value="">Auto - use best available</option>
+          ${powerOnModeOptions}
         </select>
       </div>
     </div>
@@ -835,20 +811,20 @@ this.innerHTML = `
     <div class="section">
       <div class="section-title">Background Gradients</div>
       <div class="tip">Each mode shows a two-colour gradient. Click a swatch to change its colour — the preview bar updates live.</div>
-      ${gradRow('🔥','Heating',     'heat_start',      'heat_end',       '#fb923c','#f97316')}
+      ${gradRow('','Heating',     'heat_start',      'heat_end',       '#fb923c','#f97316')}
       ${gradRow('❄️','Cooling',     'cool_start',      'cool_end',       '#60a5fa','#2563eb')}
-      ${gradRow('🔄','Heat / Cool', 'heat_cool_start', 'heat_cool_end',  '#a78bfa','#7c3aed')}
-      ${gradRow('💧','Dry',         'dry_start',       'dry_end',        '#fbbf24','#f59e0b')}
-      ${gradRow('🌀','Fan Only',    'fan_only_start',  'fan_only_end',   '#34d399','#10b981')}
+      ${gradRow('','Heat / Cool', 'heat_cool_start', 'heat_cool_end',  '#a78bfa','#7c3aed')}
+      ${gradRow('','Dry',         'dry_start',       'dry_end',        '#fbbf24','#f59e0b')}
+      ${gradRow('','Fan Only',    'fan_only_start',  'fan_only_end',   '#34d399','#10b981')}
       ${gradRow('⏸️','Idle / Off',  'idle_start',      'idle_end',       '#374151','#111827')}
     </div>
 
     <div class="section">
       <div class="section-title">Text Colors</div>
-      ${colorRow('🌡️','Current Temperature', 'current_temp_color', '#ffffff')}
-      ${colorRow('🏷️','Card Name',           'name_color',         '#ffffff')}
-      ${colorRow('📝','Status Label',         'target_label_color', '#ffffff')}
-      ${colorRow('🎯','Target Temperature',   'target_temp_color',  '#ffffff')}
+      ${colorRow('️','Current Temperature', 'current_temp_color', '#ffffff')}
+      ${colorRow('️','Card Name',           'name_color',         '#ffffff')}
+      ${colorRow('','Status Label',         'target_label_color', '#ffffff')}
+      ${colorRow('','Target Temperature',   'target_temp_color',  '#ffffff')}
     </div>
 
     <div class="section">
@@ -869,7 +845,7 @@ this.innerHTML = `
     <div class="section">
       <div class="section-title">Custom Mode Icons</div>
       <div class="tip">Leave on "Default" to use the built-in animated icons. Selecting an MDI icon will replace the animation for that mode.</div>
-      ${iconRow('🔥','Heating',    'icon_heating',   'Default — Animated Flame', [
+      ${iconRow('','Heating',    'icon_heating',   'Default — Animated Flame', [
         ['mdi:fire',                   'mdi:fire'],
         ['mdi:fireplace',              'mdi:fireplace'],
         ['mdi:radiator',               'mdi:radiator'],
@@ -886,7 +862,7 @@ this.innerHTML = `
         ['mdi:weather-snowy',            'mdi:weather-snowy'],
         ['mdi:glacier',                  'mdi:glacier'],
       ])}
-      ${iconRow('🔄','Heat / Cool','icon_heat_cool', 'Default — Animated Hourglass', [
+      ${iconRow('','Heat / Cool','icon_heat_cool', 'Default — Animated Hourglass', [
         ['mdi:autorenew',        'mdi:autorenew'],
         ['mdi:sync',             'mdi:sync'],
         ['mdi:thermometer-auto', 'mdi:thermometer-auto'],
@@ -894,7 +870,7 @@ this.innerHTML = `
         ['mdi:swap-vertical',    'mdi:swap-vertical'],
         ['mdi:thermostat-auto',  'mdi:thermostat-auto'],
       ])}
-      ${iconRow('💧','Dry',        'icon_dry',       'Default — Water Drop', [
+      ${iconRow('','Dry',        'icon_dry',       'Default — Water Drop', [
         ['mdi:water-percent',     'mdi:water-percent'],
         ['mdi:water-off',         'mdi:water-off'],
         ['mdi:water-minus',       'mdi:water-minus'],
@@ -902,7 +878,7 @@ this.innerHTML = `
         ['mdi:weather-sunny',     'mdi:weather-sunny'],
         ['mdi:weather-sunset',    'mdi:weather-sunset'],
       ])}
-      ${iconRow('🌀','Fan Only',   'icon_fan_only',  'Default — Spinning Fan', [
+      ${iconRow('','Fan Only',   'icon_fan_only',  'Default — Spinning Fan', [
         ['mdi:fan',           'mdi:fan'],
         ['mdi:fan-speed-1',   'mdi:fan-speed-1'],
         ['mdi:fan-speed-2',   'mdi:fan-speed-2'],
@@ -952,13 +928,13 @@ this.querySelector('#name-input')
 this.querySelector('#show-controls-toggle')
   .addEventListener('change', ev => this._update('show_controls', ev.target.checked));
 
-// Power on mode select
-this.querySelector('#power-on-mode-select')
-  .addEventListener('change', ev => this._update('power_on_mode', ev.target.value));
-
-// Idle icon behaviour select
+// Idle icon behaviour
 this.querySelector('#idle-icon-select')
   .addEventListener('change', ev => this._update('idle_icon', ev.target.value));
+
+// Power on mode
+this.querySelector('#power-on-mode-select')
+  .addEventListener('change', ev => this._update('power_on_mode', ev.target.value));
 
 // All data-key inputs (colours + icon selects)
 this.querySelectorAll('[data-key]').forEach(el => {
