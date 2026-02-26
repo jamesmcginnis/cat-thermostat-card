@@ -1,5 +1,5 @@
 /* =====================================================================
-CAT Thermostat Card  –  Home Assistant Custom Card 
+CAT Thermostat Card  –  Home Assistant Custom Card
 ===================================================================== */
 
 class CATThermostatCard extends HTMLElement {
@@ -52,6 +52,7 @@ icon_heat_cool: ‘’,
 icon_dry:       ‘’,
 icon_fan_only:  ‘’,
 icon_off:       ‘’,
+icon_idle:      ‘’,
 };
 }
 
@@ -311,6 +312,7 @@ const defaultIcons = {
   off:       `<svg class="state-icon" viewBox="0 0 24 24" fill="currentColor" style="opacity:0.5"><path d="M16.56,5.44L15.11,6.89C16.84,7.94 18,9.83 18,12A6,6 0 0,1 12,18A6,6 0 0,1 6,12C6,9.83 7.16,7.94 8.88,6.88L7.44,5.44C5.36,6.88 4,9.28 4,12A8,8 0 0,0 12,20A8,8 0 0,0 20,12C20,9.28 18.64,6.88 16.56,5.44M13,3H11V13H13"/></svg>`,
 };
 
+// Determine which icon slot to show
 let displayMode, idleDisplay = false;
 if (entity.state === 'off') {
   displayMode = 'off';
@@ -330,7 +332,11 @@ if (!idleDisplay) {
   animStyle = 'opacity:0.45;';
 }
 
-const customIcon = this.config[`icon_${displayMode}`];
+// icon_idle overrides when on-but-idle (and not using mode-icon style)
+var resolvedIconKey = (mode === 'idle' && !idleDisplay && this.config.icon_idle)
+  ? 'icon_idle'
+  : 'icon_' + displayMode;
+const customIcon = this.config[resolvedIconKey] || '';
 const iconHtml   = customIcon
   ? `<ha-icon class="state-icon" icon="${customIcon}" style="${animStyle}"></ha-icon>`
   : (defaultIcons[displayMode] || defaultIcons.off);
@@ -457,6 +463,15 @@ const iconRow = (emoji, title, key, placeholder, opts) => `
   </div>`;
 
 // ── Full HTML ─────────────────────────────────────────────────────
+
+// Build power-on mode options before the template (keeps template literal clean)
+var modeLabels = { heat:'Heat', cool:'Cool', heat_cool:'Heat/Cool', auto:'Auto', dry:'Dry', fan_only:'Fan Only' };
+var availModes = (c.entity && hs[c.entity] && hs[c.entity].attributes.hvac_modes)
+  ? hs[c.entity].attributes.hvac_modes.filter(function(m){ return m !== 'off'; })
+  : Object.keys(modeLabels);
+var modeOptions = availModes.map(function(m){
+  return '<option value="' + m + '"' + (c.power_on_mode === m ? ' selected' : '') + '>' + (modeLabels[m] || m) + '</option>';
+}).join('');
 
 this.innerHTML = `
   <style>
@@ -767,27 +782,21 @@ this.innerHTML = `
       <hr class="sub-divider">
       <div class="field">
         <label class="field-label">Idle Icon Behaviour
-          <span class="field-hint">(when on but not running)</span>
+          <span class="field-hint">(when on but not actively heating/cooling)</span>
         </label>
         <select id="idle-icon-select" class="sel">
-          <option value="power" ${(c.idle_icon||'power')==='power' ? 'selected' : ''}>Power icon - same as off (original)</option>
-          <option value="mode"  ${c.idle_icon==='mode' ? 'selected' : ''}>Mode icon - dimmed; power only when truly off</option>
+          <option value="power" ${(c.idle_icon||'power') === 'power' ? 'selected' : ''}>Power icon (same as off)</option>
+          <option value="mode"  ${c.idle_icon === 'mode' ? 'selected' : ''}>Dimmed mode icon</option>
         </select>
       </div>
       <hr class="sub-divider">
       <div class="field">
         <label class="field-label">Power On Mode
-          <span class="field-hint">(mode activated when turning on)</span>
+          <span class="field-hint">(HVAC mode activated when turning on)</span>
         </label>
         <select id="power-on-mode-select" class="sel">
-          <option value="">Auto - use best available</option>
-          ${(() => {
-            const ml = { heat:'Heat', cool:'Cool', heat_cool:'Heat/Cool', auto:'Auto', dry:'Dry', fan_only:'Fan Only' };
-            const em = (c.entity && hs[c.entity] && hs[c.entity].attributes.hvac_modes)
-              ? hs[c.entity].attributes.hvac_modes.filter(m => m !== 'off')
-              : Object.keys(ml);
-            return em.map(m => '<option value="' + m + '"' + (c.power_on_mode===m?' selected':'') + '>' + (ml[m]||m) + '</option>').join('');
-          })()}
+          <option value="">Auto – use best available</option>
+          ${modeOptions}
         </select>
       </div>
     </div>
@@ -883,6 +892,16 @@ this.innerHTML = `
         ['mdi:sleep',         'mdi:sleep'],
         ['mdi:cancel',        'mdi:cancel'],
       ])}
+      ${iconRow('💤','Idle (reached temp)','icon_idle','Default – same as Off/Power icon', [
+        ['mdi:thermometer-check',    'mdi:thermometer-check'],
+        ['mdi:thermometer-lines',    'mdi:thermometer-lines'],
+        ['mdi:check-circle-outline', 'mdi:check-circle-outline'],
+        ['mdi:clock-outline',        'mdi:clock-outline'],
+        ['mdi:leaf',                 'mdi:leaf'],
+        ['mdi:sleep',                'mdi:sleep'],
+        ['mdi:pause-circle-outline', 'mdi:pause-circle-outline'],
+        ['mdi:home-thermometer',     'mdi:home-thermometer'],
+      ])}
     </div>
   </div>
 `;
@@ -895,6 +914,7 @@ this._bindEvents();
 // ── Event wiring ───────────────────────────────────────────────────
 
 _bindEvents() {
+var self = this;
 // Tab switching
 this.querySelectorAll(’.tab’).forEach(tab => {
 tab.addEventListener(‘click’, () => {
@@ -916,11 +936,11 @@ this.querySelector('#name-input')
 this.querySelector('#show-controls-toggle')
   .addEventListener('change', ev => this._update('show_controls', ev.target.checked));
 
-// Idle icon and power-on mode (may not exist in older configs)
-const idleIconEl = this.querySelector('#idle-icon-select');
-if (idleIconEl) idleIconEl.addEventListener('change', ev => this._update('idle_icon', ev.target.value));
-const powerModeEl = this.querySelector('#power-on-mode-select');
-if (powerModeEl) powerModeEl.addEventListener('change', ev => this._update('power_on_mode', ev.target.value));
+// Idle icon behaviour and power-on mode selects
+var idleIconEl = this.querySelector('#idle-icon-select');
+if (idleIconEl) idleIconEl.addEventListener('change', function(ev){ self._update('idle_icon', ev.target.value); });
+var powerModeEl = this.querySelector('#power-on-mode-select');
+if (powerModeEl) powerModeEl.addEventListener('change', function(ev){ self._update('power_on_mode', ev.target.value); });
 
 // All data-key inputs (colours + icon selects)
 this.querySelectorAll('[data-key]').forEach(el => {
