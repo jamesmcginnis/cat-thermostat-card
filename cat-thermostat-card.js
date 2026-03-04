@@ -41,13 +41,17 @@ class CATThermostatCard extends HTMLElement {
       btn_icon_color: '#ffffff',
       // Show +/- controls
       show_controls: true,
-      // Custom icons (empty = use built-in animated SVG)
+      // Custom icons (empty = use built-in SVG)
       icon_heating:   '',
       icon_cooling:   '',
       icon_heat_cool: '',
       icon_dry:       '',
       icon_fan_only:  '',
+      icon_idle:      '',
       icon_off:       '',
+      // HVAC mode to restore when turning the thermostat on
+      // 'auto' = pick automatically from the entity's available modes (original behaviour)
+      turn_on_mode:   'auto',
     };
   }
 
@@ -225,13 +229,22 @@ class CATThermostatCard extends HTMLElement {
   _togglePower() {
     const entity = this._hass.states[this.config.entity];
     if (entity.state === 'off') {
-      const modes = entity.attributes.hvac_modes || [];
-      let target = 'heat_cool';
-      if      (modes.includes('auto'))      target = 'auto';
-      else if (modes.includes('heat_cool')) target = 'heat_cool';
-      else if (modes.includes('heat'))      target = 'heat';
-      else if (modes.includes('cool'))      target = 'cool';
-      else if (modes.length > 1)            target = modes.find(m => m !== 'off') || modes[0];
+      const modes      = entity.attributes.hvac_modes || [];
+      const configured = this.config.turn_on_mode || 'auto';
+
+      let target;
+      if (configured !== 'auto' && modes.includes(configured)) {
+        // Use the mode the user explicitly chose in the editor
+        target = configured;
+      } else {
+        // Fall back: pick the best available mode automatically
+        if      (modes.includes('heat_cool')) target = 'heat_cool';
+        else if (modes.includes('auto'))      target = 'auto';
+        else if (modes.includes('heat'))      target = 'heat';
+        else if (modes.includes('cool'))      target = 'cool';
+        else target = modes.find(m => m !== 'off') || modes[0];
+      }
+
       this._hass.callService('climate', 'set_hvac_mode', {
         entity_id: this.config.entity,
         hvac_mode: target,
@@ -314,19 +327,23 @@ class CATThermostatCard extends HTMLElement {
       heat_cool: `<svg class="state-icon" viewBox="0 0 24 24" fill="currentColor" style="animation:pulse 2s infinite ease-in-out"><path d="M12,2C10.73,2 9.6,2.8 9.18,4H3V6H4.95L2,14C1.53,16 3,17.45 5.5,18C8.5,18.55 9.5,19.5 9.5,21H14.5C14.5,19.5 15.5,18.55 18.5,18C21,17.45 22.47,16 22,14L19.05,6H21V4H14.82C14.4,2.8 13.27,2 12,2M12,4A1,1 0 0,1 13,5A1,1 0 0,1 12,6A1,1 0 0,1 11,5A1,1 0 0,1 12,4M5.05,6H18.95L21.9,14.12C22.03,14.82 21.63,15.5 20.73,15.84C17.35,17.06 16.39,18.25 16.14,19H7.86C7.61,18.25 6.65,17.06 3.27,15.84C2.37,15.5 1.97,14.82 2.1,14.12L5.05,6Z"/></svg>`,
       dry:       `<svg class="state-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12,2C15.31,2 18,4.66 18,7.95C18,12.41 12,19 12,19C12,19 6,12.41 6,7.95C6,4.66 8.69,2 12,2M12,4A3.94,3.94 0 0,0 8,7.95C8,11.14 11.63,16.07 12,16.58C12.37,16.07 16,11.14 16,7.95A3.94,3.94 0 0,0 12,4M14,17H10V22H14V17Z"/></svg>`,
       fan_only:  `<svg class="state-icon" viewBox="0 0 24 24" fill="currentColor" style="animation:spin 3s linear infinite"><path d="M12,11A1,1 0 0,0 11,12A1,1 0 0,0 12,13A1,1 0 0,0 13,12A1,1 0 0,0 12,11M12.5,2C17,2 17.11,5.57 14.75,6.75C13.76,7.24 13.32,8.29 13.13,9.22C13.61,9.42 14.03,9.73 14.35,10.13C18.05,8.13 22.03,8.92 22.03,12.5C22.03,17 18.46,17.1 17.28,14.73C16.78,13.74 15.72,13.3 14.79,13.11C14.59,13.59 14.28,14 13.88,14.34C15.87,18.03 15.08,22 11.5,22C7,22 6.91,18.42 9.27,17.24C10.25,16.75 10.69,15.71 10.89,14.79C10.4,14.59 9.97,14.27 9.65,13.87C5.96,15.85 2,15.07 2,11.5C2,7 5.56,6.89 6.74,9.26C7.24,10.25 8.29,10.68 9.22,10.87C9.41,10.39 9.73,9.97 10.14,9.65C8.15,5.96 8.94,2 12.5,2Z"/></svg>`,
+      // Idle: home-thermometer style — looks natural for "standing by"
+      idle:      `<svg class="state-icon" viewBox="0 0 24 24" fill="currentColor" style="opacity:0.7"><path d="M22,9V7H20V5C20,3.89 19.1,3 18,3H4C2.89,3 2,3.89 2,5V15A2,2 0 0,0 4,17H18C19.1,17 20,16.11 20,15V13H22V11H20V9H22M18,15H4V5H18V15M6,13H8.5V11.5H9.5V13H12V7H10V10H9V7H6V13M14,13H16V11H14V9H16V7H13V13H14V13Z"/></svg>`,
       off:       `<svg class="state-icon" viewBox="0 0 24 24" fill="currentColor" style="opacity:0.5"><path d="M16.56,5.44L15.11,6.89C16.84,7.94 18,9.83 18,12A6,6 0 0,1 12,18A6,6 0 0,1 6,12C6,9.83 7.16,7.94 8.88,6.88L7.44,5.44C5.36,6.88 4,9.28 4,12A8,8 0 0,0 12,20A8,8 0 0,0 20,12C20,9.28 18.64,6.88 16.56,5.44M13,3H11V13H13"/></svg>`,
     };
 
+    // idle = thermostat on but not actively heating/cooling; off = entity state is 'off'
     const displayMode = entity.state === 'off' ? 'off' : mode;
     let animStyle = '';
     if (displayMode === 'heat_cool') animStyle = 'animation:pulse 2s infinite ease-in-out;';
     if (displayMode === 'fan_only')  animStyle = 'animation:spin 3s linear infinite;';
     if (displayMode === 'off')       animStyle = 'opacity:0.5;';
+    if (displayMode === 'idle')      animStyle = 'opacity:0.7;';
 
     const customIcon = this.config[`icon_${displayMode}`];
     const iconHtml   = customIcon
       ? `<ha-icon class="state-icon" icon="${customIcon}" style="${animStyle}"></ha-icon>`
-      : (defaultIcons[displayMode] || defaultIcons.off);
+      : (defaultIcons[displayMode] || defaultIcons.idle);
 
     const iconContainer = this.shadowRoot.querySelector('.icon-container');
     iconContainer.innerHTML = iconHtml;
@@ -768,6 +785,22 @@ class CATThermostatCardEditor extends HTMLElement {
             </label>
           </div>
         </div>
+
+        <div class="section">
+          <div class="section-title">Power On Behaviour</div>
+          <div class="tip">Choose which HVAC mode is activated when you tap the icon to turn the thermostat on. Only modes supported by your device will actually be used — if your chosen mode is unavailable the card falls back automatically.</div>
+          <div class="field">
+            <label class="field-label">Turn On Mode</label>
+            <select id="turn-on-mode-select" class="sel">
+              <option value="auto"      ${(c.turn_on_mode||'auto')==='auto'      ?'selected':''}>🔀 Auto — pick best available mode</option>
+              <option value="heat_cool" ${(c.turn_on_mode||'')==='heat_cool'     ?'selected':''}>🔄 Heat / Cool (heat_cool)</option>
+              <option value="heat"      ${(c.turn_on_mode||'')==='heat'          ?'selected':''}>🔥 Heat</option>
+              <option value="cool"      ${(c.turn_on_mode||'')==='cool'          ?'selected':''}>❄️ Cool</option>
+              <option value="dry"       ${(c.turn_on_mode||'')==='dry'           ?'selected':''}>💧 Dry</option>
+              <option value="fan_only"  ${(c.turn_on_mode||'')==='fan_only'      ?'selected':''}>🌀 Fan Only</option>
+            </select>
+          </div>
+        </div>
       </div>
 
       <!-- ══════════ COLORS PANEL ══════════ -->
@@ -852,7 +885,17 @@ class CATThermostatCardEditor extends HTMLElement {
             ['mdi:weather-windy', 'mdi:weather-windy'],
             ['mdi:air-filter',    'mdi:air-filter'],
           ])}
-          ${iconRow('⏸️','Off / Power','icon_off',       'Default — Power Symbol', [
+          ${iconRow('⏸️','Idle (Standby)','icon_idle',  'Default — Thermostat Display', [
+            ['mdi:thermometer',              'mdi:thermometer'],
+            ['mdi:home-thermometer',         'mdi:home-thermometer'],
+            ['mdi:home-thermometer-outline', 'mdi:home-thermometer-outline'],
+            ['mdi:thermostat',               'mdi:thermostat'],
+            ['mdi:thermostat-box',           'mdi:thermostat-box'],
+            ['mdi:heat-wave',                'mdi:heat-wave'],
+            ['mdi:pause-circle-outline',     'mdi:pause-circle-outline'],
+            ['mdi:sleep',                    'mdi:sleep'],
+          ])}
+          ${iconRow('⏹️','Off / Power','icon_off',       'Default — Power Symbol', [
             ['mdi:power',         'mdi:power'],
             ['mdi:power-off',     'mdi:power-off'],
             ['mdi:power-standby', 'mdi:power-standby'],
@@ -889,6 +932,10 @@ class CATThermostatCardEditor extends HTMLElement {
     // Show controls toggle
     this.querySelector('#show-controls-toggle')
       .addEventListener('change', ev => this._update('show_controls', ev.target.checked));
+
+    // Turn-on mode select
+    this.querySelector('#turn-on-mode-select')
+      .addEventListener('change', ev => this._update('turn_on_mode', ev.target.value));
 
     // All data-key inputs (colours + icon selects)
     this.querySelectorAll('[data-key]').forEach(el => {
