@@ -197,10 +197,27 @@ class CATThermostatCard extends HTMLElement {
   // ── Helpers ────────────────────────────────────────────────────────
 
   _changeTemp(delta) {
-    const entity  = this._hass.states[this.config.entity];
-    const newTemp = parseFloat(((entity.attributes.temperature || 0) + delta).toFixed(1));
+    const entity = this._hass.states[this.config.entity];
+    const attrs  = entity.attributes;
+
+    // Dual-setpoint mode (heat_cool / auto) — uses target_temp_low / target_temp_high
+    if (attrs.target_temp_low != null && attrs.target_temp_high != null) {
+      const low  = parseFloat((attrs.target_temp_low  + delta).toFixed(1));
+      const high = parseFloat((attrs.target_temp_high + delta).toFixed(1));
+      this._hass.callService('climate', 'set_temperature', {
+        entity_id:        this.config.entity,
+        target_temp_low:  low,
+        target_temp_high: high,
+      });
+      return;
+    }
+
+    // Single-setpoint mode (heat / cool / dry / fan_only)
+    const current = attrs.temperature;
+    if (current == null) return; // entity off or does not support a setpoint
+    const newTemp = parseFloat((current + delta).toFixed(1));
     this._hass.callService('climate', 'set_temperature', {
-      entity_id: this.config.entity,
+      entity_id:   this.config.entity,
       temperature: newTemp,
     });
   }
@@ -348,9 +365,22 @@ class CATThermostatCard extends HTMLElement {
     targetLabelEl.style.color = this.config.target_label_color || '#ffffff';
 
     const showTarget = ['heating', 'cooling', 'heat_cool'].includes(mode);
-    targetTempEl.textContent = showTarget
-      ? (entity.attributes.temperature || 0).toFixed(1) + '\u00b0'
-      : '';
+    if (showTarget) {
+      const attrs = entity.attributes;
+      if (attrs.target_temp_low != null && attrs.target_temp_high != null) {
+        // Dual-setpoint: show "low° – high°"
+        targetTempEl.textContent =
+          attrs.target_temp_low.toFixed(1) + '\u00b0' +
+          ' \u2013 ' +
+          attrs.target_temp_high.toFixed(1) + '\u00b0';
+      } else {
+        targetTempEl.textContent = attrs.temperature != null
+          ? attrs.temperature.toFixed(1) + '\u00b0'
+          : '';
+      }
+    } else {
+      targetTempEl.textContent = '';
+    }
     targetTempEl.style.color = this.config.target_temp_color || '#ffffff';
   }
 }
