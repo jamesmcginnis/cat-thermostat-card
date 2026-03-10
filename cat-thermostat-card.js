@@ -49,6 +49,8 @@ class CATThermostatCard extends HTMLElement {
       icon_fan_only:  '',
       icon_idle:      '',
       icon_off:       '',
+      // Transparent / glass background (overrides all gradient colours)
+      bg_transparent: false,
       // HVAC mode to restore when turning the thermostat on
       // 'auto' = pick automatically from the entity's available modes (original behaviour)
       turn_on_mode:   'auto',
@@ -294,7 +296,13 @@ class CATThermostatCard extends HTMLElement {
       this.config.idle_start || '#374151',
       this.config.idle_end   || '#111827',
     ];
-    card.style.background = `linear-gradient(135deg, ${start}, ${end})`;
+    if (this.config.bg_transparent) {
+      card.style.background = 'transparent';
+      card.style.border     = '1px solid rgba(255,255,255,0.15)';
+    } else {
+      card.style.background = `linear-gradient(135deg, ${start}, ${end})`;
+      card.style.border     = '';
+    }
     card.classList.toggle('is-active', isActive);
 
     // ── Show / hide +/- controls ────────────────────────────────────
@@ -787,6 +795,21 @@ class CATThermostatCardEditor extends HTMLElement {
         </div>
 
         <div class="section">
+          <div class="section-title">Background</div>
+          <div class="toggle-row">
+            <div>
+              <span class="toggle-label">🪟 Transparent / Glass</span>
+              <div style="font-size:11px;color:var(--secondary-text-color,#6b7280);margin-top:3px;">Removes all gradient colours — shows a subtle glass outline instead</div>
+            </div>
+            <label class="toggle-switch" style="flex-shrink:0;margin-left:12px;">
+              <input id="bg-transparent-toggle" type="checkbox"
+                     ${c.bg_transparent ? 'checked' : ''}>
+              <span class="toggle-track"></span>
+            </label>
+          </div>
+        </div>
+
+        <div class="section">
           <div class="section-title">Power On Behaviour</div>
           <div class="tip">Choose which HVAC mode is activated when you tap the icon to turn the thermostat on. Only modes supported by your device will actually be used — if your chosen mode is unavailable the card falls back automatically.</div>
           <div class="field">
@@ -932,6 +955,9 @@ class CATThermostatCardEditor extends HTMLElement {
     // Show controls toggle
     this.querySelector('#show-controls-toggle')
       .addEventListener('change', ev => this._update('show_controls', ev.target.checked));
+
+    this.querySelector('#bg-transparent-toggle')
+      .addEventListener('change', ev => this._update('bg_transparent', ev.target.checked));
 
     // Turn-on mode select
     this.querySelector('#turn-on-mode-select')
