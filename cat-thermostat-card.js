@@ -56,6 +56,13 @@ class CATThermostatCard extends HTMLElement {
       dry_transparent:       false,
       fan_only_transparent:  false,
       idle_transparent:      false,
+      // Per-mode breathing / pulsing glow animation
+      heat_breathe:          false,
+      cool_breathe:          false,
+      heat_cool_breathe:     false,
+      dry_breathe:           false,
+      fan_only_breathe:      false,
+      idle_breathe:          false,
       // HVAC mode to restore when turning the thermostat on
       // 'auto' = pick automatically from the entity's available modes (original behaviour)
       turn_on_mode:   'auto',
@@ -135,6 +142,25 @@ class CATThermostatCard extends HTMLElement {
         @keyframes pulse {
           0%, 100% { transform: scale(1);    opacity: 0.7; }
           50%       { transform: scale(1.15); opacity: 1;  }
+        }
+
+        /* ── Card breathing / pulsing glow ── */
+        @keyframes card-breathe {
+          0%, 100% {
+            transform: scale(1);
+            box-shadow: var(--ha-card-box-shadow, 0 2px 2px rgba(0,0,0,0.14));
+          }
+          50% {
+            transform: scale(1.013);
+            box-shadow:
+              0 8px 32px rgba(0,0,0,0.32),
+              0 0 0 2px var(--breathe-glow, rgba(255,255,255,0.18)),
+              0 0 28px 4px var(--breathe-glow, rgba(255,255,255,0.12));
+          }
+        }
+        .card.breathing {
+          animation: card-breathe var(--breathe-speed, 3.5s) ease-in-out infinite;
+          transform-origin: center center;
         }
 
         .bottom-row {
@@ -317,6 +343,21 @@ class CATThermostatCard extends HTMLElement {
     }
     card.classList.toggle('is-active', isActive);
 
+    // Per-mode breathing glow — maps mode → config breathe key + glow colour
+    const _breatheKey  = { heating:'heat_breathe', cooling:'cool_breathe',
+                           heat_cool:'heat_cool_breathe', dry:'dry_breathe',
+                           fan_only:'fan_only_breathe', idle:'idle_breathe' };
+    const _glowColours = { heating:'rgba(251,146,60,0.45)', cooling:'rgba(96,165,250,0.45)',
+                           heat_cool:'rgba(167,139,250,0.45)', dry:'rgba(251,191,36,0.45)',
+                           fan_only:'rgba(52,211,153,0.45)', idle:'rgba(156,163,175,0.3)' };
+    const isBreathe = !!this.config[_breatheKey[mode] || ''];
+    card.classList.toggle('breathing', isBreathe);
+    if (isBreathe) {
+      card.style.setProperty('--breathe-glow', isGlass
+        ? 'rgba(255,255,255,0.18)'
+        : (_glowColours[mode] || 'rgba(255,255,255,0.18)'));
+    }
+
     // ── Show / hide +/- controls ────────────────────────────────────
     const controlsEl = this.shadowRoot.querySelector('.controls');
     if (controlsEl) {
@@ -460,12 +501,12 @@ class CATThermostatCardEditor extends HTMLElement {
 
     // ── Mode groups for the Colours tab ─────────────────────────────
     const MODES = [
-      { id:'heat',      emoji:'🔥', label:'Heating',     startKey:'heat_start',      endKey:'heat_end',       startDef:'#fb923c', endDef:'#f97316',  transKey:'heat_transparent'      },
-      { id:'cool',      emoji:'❄️', label:'Cooling',     startKey:'cool_start',      endKey:'cool_end',       startDef:'#60a5fa', endDef:'#2563eb',  transKey:'cool_transparent'      },
-      { id:'heat_cool', emoji:'🔄', label:'Heat / Cool', startKey:'heat_cool_start', endKey:'heat_cool_end',  startDef:'#a78bfa', endDef:'#7c3aed',  transKey:'heat_cool_transparent' },
-      { id:'dry',       emoji:'💧', label:'Dry',         startKey:'dry_start',       endKey:'dry_end',        startDef:'#fbbf24', endDef:'#f59e0b',  transKey:'dry_transparent'       },
-      { id:'fan_only',  emoji:'🌀', label:'Fan Only',    startKey:'fan_only_start',  endKey:'fan_only_end',   startDef:'#34d399', endDef:'#10b981',  transKey:'fan_only_transparent'  },
-      { id:'idle',      emoji:'⏸️', label:'Idle / Off', startKey:'idle_start',      endKey:'idle_end',       startDef:'#374151', endDef:'#111827',  transKey:'idle_transparent'      },
+      { id:'heat',      emoji:'🔥', label:'Heating',     startKey:'heat_start',      endKey:'heat_end',       startDef:'#fb923c', endDef:'#f97316',  transKey:'heat_transparent',      breatheKey:'heat_breathe'      },
+      { id:'cool',      emoji:'❄️', label:'Cooling',     startKey:'cool_start',      endKey:'cool_end',       startDef:'#60a5fa', endDef:'#2563eb',  transKey:'cool_transparent',      breatheKey:'cool_breathe'      },
+      { id:'heat_cool', emoji:'🔄', label:'Heat / Cool', startKey:'heat_cool_start', endKey:'heat_cool_end',  startDef:'#a78bfa', endDef:'#7c3aed',  transKey:'heat_cool_transparent', breatheKey:'heat_cool_breathe' },
+      { id:'dry',       emoji:'💧', label:'Dry',         startKey:'dry_start',       endKey:'dry_end',        startDef:'#fbbf24', endDef:'#f59e0b',  transKey:'dry_transparent',       breatheKey:'dry_breathe'       },
+      { id:'fan_only',  emoji:'🌀', label:'Fan Only',    startKey:'fan_only_start',  endKey:'fan_only_end',   startDef:'#34d399', endDef:'#10b981',  transKey:'fan_only_transparent',  breatheKey:'fan_only_breathe'  },
+      { id:'idle',      emoji:'⏸️', label:'Idle / Off', startKey:'idle_start',      endKey:'idle_end',       startDef:'#374151', endDef:'#111827',  transKey:'idle_transparent',      breatheKey:'idle_breathe'      },
     ];
 
     const TEXT_FIELDS = [
@@ -870,17 +911,21 @@ class CATThermostatCardEditor extends HTMLElement {
     // ── Build per-mode gradient groups ──────────────────────────────
     const modeContainer = this.shadowRoot.getElementById('mode-groups');
     for (const mode of MODES) {
-      const isGlass = !!this._config[mode.transKey];
+      const isGlass   = !!this._config[mode.transKey];
+      const isBreathe = !!this._config[mode.breatheKey];
 
       const groupWrap = document.createElement('div');
       groupWrap.dataset.modeGroup = mode.id;
 
-      // Section label + glass badge
+      // Section label + badges
       const labelRow = document.createElement('div');
-      labelRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin:0 4px 6px;';
+      labelRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin:0 4px 6px;gap:6px;';
       labelRow.innerHTML = `
         <span class="group-label" style="margin:0;">${mode.emoji} ${mode.label}</span>
-        <span class="glass-badge ${isGlass ? 'visible' : ''}" id="badge-${mode.id}">🪟 Glass</span>`;
+        <span style="display:flex;gap:5px;flex-shrink:0;">
+          <span class="glass-badge ${isGlass ? 'visible' : ''}" id="badge-${mode.id}">🪟 Glass</span>
+          <span class="glass-badge ${isBreathe ? 'visible' : ''}" id="breathe-badge-${mode.id}" style="background:rgba(255,149,0,0.12);color:#FF9500;">💓 Breathe</span>
+        </span>`;
       groupWrap.appendChild(labelRow);
 
       // Card group
@@ -903,6 +948,21 @@ class CATThermostatCardEditor extends HTMLElement {
         </label>`;
       group.appendChild(glassRow);
 
+      // Breathe toggle row
+      const breatheRow = document.createElement('div');
+      breatheRow.className = 'ios-row';
+      breatheRow.innerHTML = `
+        <div class="ios-row-label">
+          Breathing Glow
+          <div class="ios-row-hint">Card softly pulses with a coloured glow in this mode</div>
+        </div>
+        <label class="ios-toggle">
+          <input type="checkbox" data-breathe-key="${mode.breatheKey}"
+                 ${isBreathe ? 'checked' : ''}>
+          <span class="ios-toggle-track" style="background:${isBreathe ? '#FF9500' : ''}"></span>
+        </label>`;
+      group.appendChild(breatheRow);
+
       // Colour cards row
       const gridRow = document.createElement('div');
       gridRow.className = 'colour-grid';
@@ -917,14 +977,25 @@ class CATThermostatCardEditor extends HTMLElement {
       modeContainer.appendChild(groupWrap);
 
       // Wire glass toggle
-      const glassInput = glassRow.querySelector('input[type=checkbox]');
-      const badge      = labelRow.querySelector('.glass-badge');
+      const glassInput  = glassRow.querySelector('input[type=checkbox]');
+      const glassBadge  = labelRow.querySelector(`#badge-${mode.id}`);
       glassInput.addEventListener('change', () => {
         const on = glassInput.checked;
-        gridRow.style.opacity = on ? '0.38' : '1';
+        gridRow.style.opacity       = on ? '0.38' : '1';
         gridRow.style.pointerEvents = on ? 'none' : '';
-        badge.classList.toggle('visible', on);
+        glassBadge.classList.toggle('visible', on);
         this._update(mode.transKey, on);
+      });
+
+      // Wire breathe toggle — orange track when on
+      const breatheInput = breatheRow.querySelector('input[type=checkbox]');
+      const breatheTrack = breatheRow.querySelector('.ios-toggle-track');
+      const breatheBadge = labelRow.querySelector(`#breathe-badge-${mode.id}`);
+      breatheInput.addEventListener('change', () => {
+        const on = breatheInput.checked;
+        breatheTrack.style.background = on ? '#FF9500' : '';
+        breatheBadge.classList.toggle('visible', on);
+        this._update(mode.breatheKey, on);
       });
     }
 
@@ -1022,6 +1093,17 @@ class CATThermostatCardEditor extends HTMLElement {
       const grid   = root.getElementById(`grid-${modeId}`);
       if (grid) { grid.style.opacity = on ? '0.38' : '1'; grid.style.pointerEvents = on ? 'none' : ''; }
       const badge  = root.getElementById(`badge-${modeId}`);
+      if (badge) badge.classList.toggle('visible', on);
+    });
+
+    // Breathe toggles
+    root.querySelectorAll('[data-breathe-key]').forEach(input => {
+      const on    = !!this._config[input.dataset.breatheKey];
+      input.checked = on;
+      const track = input.nextElementSibling;
+      if (track) track.style.background = on ? '#FF9500' : '';
+      const modeId = input.dataset.breatheKey.replace('_breathe','');
+      const badge  = root.getElementById(`breathe-badge-${modeId}`);
       if (badge) badge.classList.toggle('visible', on);
     });
 
