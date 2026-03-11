@@ -63,6 +63,25 @@ class CATThermostatCard extends HTMLElement {
       dry_breathe:           false,
       fan_only_breathe:      false,
       idle_breathe:          false,
+      // Per-mode text / icon / button colours (empty = fall back to global colour)
+      // heat_*
+      heat_current_temp_color: '', heat_name_color: '', heat_target_label_color: '',
+      heat_target_temp_color: '', heat_icon_color: '', heat_btn_bg_color: '', heat_btn_icon_color: '',
+      // cool_*
+      cool_current_temp_color: '', cool_name_color: '', cool_target_label_color: '',
+      cool_target_temp_color: '', cool_icon_color: '', cool_btn_bg_color: '', cool_btn_icon_color: '',
+      // heat_cool_*
+      heat_cool_current_temp_color: '', heat_cool_name_color: '', heat_cool_target_label_color: '',
+      heat_cool_target_temp_color: '', heat_cool_icon_color: '', heat_cool_btn_bg_color: '', heat_cool_btn_icon_color: '',
+      // dry_*
+      dry_current_temp_color: '', dry_name_color: '', dry_target_label_color: '',
+      dry_target_temp_color: '', dry_icon_color: '', dry_btn_bg_color: '', dry_btn_icon_color: '',
+      // fan_only_*
+      fan_only_current_temp_color: '', fan_only_name_color: '', fan_only_target_label_color: '',
+      fan_only_target_temp_color: '', fan_only_icon_color: '', fan_only_btn_bg_color: '', fan_only_btn_icon_color: '',
+      // idle_*
+      idle_current_temp_color: '', idle_name_color: '', idle_target_label_color: '',
+      idle_target_temp_color: '', idle_icon_color: '', idle_btn_bg_color: '', idle_btn_icon_color: '',
       // HVAC mode to restore when turning the thermostat on
       // 'auto' = pick automatically from the entity's available modes (original behaviour)
       turn_on_mode:   'auto',
@@ -364,9 +383,16 @@ class CATThermostatCard extends HTMLElement {
       controlsEl.style.display = (this.config.show_controls === false) ? 'none' : 'flex';
     }
 
+    // ── Per-mode colour resolver (falls back to global then hard default) ──
+    const _prefix = { heating:'heat', cooling:'cool', heat_cool:'heat_cool',
+                      dry:'dry', fan_only:'fan_only', idle:'idle' };
+    const pfx = _prefix[mode] || 'idle';
+    const mc = (perModeKey, globalKey, hardDefault) =>
+      this.config[`${pfx}_${perModeKey}`] || this.config[globalKey] || hardDefault;
+
     // ── Button colours ──────────────────────────────────────────────
-    const btnBg   = this.config.btn_bg_color   || '#ffffff';
-    const btnIcon = this.config.btn_icon_color || '#ffffff';
+    const btnBg   = mc('btn_bg_color',   'btn_bg_color',   '#ffffff');
+    const btnIcon = mc('btn_icon_color', 'btn_icon_color', '#ffffff');
 
     // Convert hex to rgba so we keep a translucent glass look at 25% opacity
     const hexToRgba = (hex, alpha) => {
@@ -409,7 +435,7 @@ class CATThermostatCard extends HTMLElement {
     const iconContainer = this.shadowRoot.querySelector('.icon-container');
     iconContainer.innerHTML = iconHtml;
 
-    const iconColor = this.config.icon_color || '#ffffff';
+    const iconColor = mc('icon_color', 'icon_color', '#ffffff');
     iconContainer.style.color = iconColor;
 
     const iconEl = iconContainer.querySelector('.state-icon');
@@ -426,10 +452,10 @@ class CATThermostatCard extends HTMLElement {
     const targetTempEl  = this.shadowRoot.querySelector('.target-temp');
 
     currentTempEl.textContent = (entity.attributes.current_temperature || 0).toFixed(1) + '\u00b0';
-    currentTempEl.style.color = this.config.current_temp_color || '#ffffff';
+    currentTempEl.style.color = mc('current_temp_color', 'current_temp_color', '#ffffff');
 
     nameEl.textContent = this.config.name || entity.attributes.friendly_name || entity.entity_id;
-    nameEl.style.color = this.config.name_color || '#ffffff';
+    nameEl.style.color = mc('name_color', 'name_color', '#ffffff');
 
     const labels = {
       heating:  'Heating to ',
@@ -440,7 +466,7 @@ class CATThermostatCard extends HTMLElement {
       idle:     entity.state.charAt(0).toUpperCase() + entity.state.slice(1),
     };
     targetLabelEl.textContent = labels[mode] || entity.state;
-    targetLabelEl.style.color = this.config.target_label_color || '#ffffff';
+    targetLabelEl.style.color = mc('target_label_color', 'target_label_color', '#ffffff');
 
     const showTarget = ['heating', 'cooling', 'heat_cool'].includes(mode);
     if (showTarget) {
@@ -459,7 +485,7 @@ class CATThermostatCard extends HTMLElement {
     } else {
       targetTempEl.textContent = '';
     }
-    targetTempEl.style.color = this.config.target_temp_color || '#ffffff';
+    targetTempEl.style.color = mc('target_temp_color', 'target_temp_color', '#ffffff');
   }
 }
 
@@ -500,13 +526,24 @@ class CATThermostatCardEditor extends HTMLElement {
     const climateEntities = Object.keys(hs).filter(e => e.startsWith('climate.'));
 
     // ── Mode groups for the Colours tab ─────────────────────────────
+    // Per-mode colour fields — key suffix, label, description, global fallback key
+    const PER_MODE_COLOURS = [
+      { suffix:'current_temp_color',  label:'Current Temp',    desc:'Large temperature reading',       globalKey:'current_temp_color'  },
+      { suffix:'name_color',          label:'Card Name',       desc:'Name below the temperature',      globalKey:'name_color'          },
+      { suffix:'target_label_color',  label:'Status Label',    desc:'"Heating to", "Cooling to" …',    globalKey:'target_label_color'  },
+      { suffix:'target_temp_color',   label:'Target Temp',     desc:'Setpoint value',                  globalKey:'target_temp_color'   },
+      { suffix:'icon_color',          label:'Mode Icon',       desc:'Animated HVAC state icon',        globalKey:'icon_color'          },
+      { suffix:'btn_bg_color',        label:'Button Bg',       desc:'+/− background (25% opacity)',    globalKey:'btn_bg_color'        },
+      { suffix:'btn_icon_color',      label:'Button Symbol',   desc:'+/− icon colour',                 globalKey:'btn_icon_color'      },
+    ];
+
     const MODES = [
-      { id:'heat',      emoji:'🔥', label:'Heating',     startKey:'heat_start',      endKey:'heat_end',       startDef:'#fb923c', endDef:'#f97316',  transKey:'heat_transparent',      breatheKey:'heat_breathe'      },
-      { id:'cool',      emoji:'❄️', label:'Cooling',     startKey:'cool_start',      endKey:'cool_end',       startDef:'#60a5fa', endDef:'#2563eb',  transKey:'cool_transparent',      breatheKey:'cool_breathe'      },
-      { id:'heat_cool', emoji:'🔄', label:'Heat / Cool', startKey:'heat_cool_start', endKey:'heat_cool_end',  startDef:'#a78bfa', endDef:'#7c3aed',  transKey:'heat_cool_transparent', breatheKey:'heat_cool_breathe' },
-      { id:'dry',       emoji:'💧', label:'Dry',         startKey:'dry_start',       endKey:'dry_end',        startDef:'#fbbf24', endDef:'#f59e0b',  transKey:'dry_transparent',       breatheKey:'dry_breathe'       },
-      { id:'fan_only',  emoji:'🌀', label:'Fan Only',    startKey:'fan_only_start',  endKey:'fan_only_end',   startDef:'#34d399', endDef:'#10b981',  transKey:'fan_only_transparent',  breatheKey:'fan_only_breathe'  },
-      { id:'idle',      emoji:'⏸️', label:'Idle / Off', startKey:'idle_start',      endKey:'idle_end',       startDef:'#374151', endDef:'#111827',  transKey:'idle_transparent',      breatheKey:'idle_breathe'      },
+      { id:'heat',      emoji:'🔥', label:'Heating',     startKey:'heat_start',      endKey:'heat_end',       startDef:'#fb923c', endDef:'#f97316',  transKey:'heat_transparent',      breatheKey:'heat_breathe',      prefix:'heat'      },
+      { id:'cool',      emoji:'❄️', label:'Cooling',     startKey:'cool_start',      endKey:'cool_end',       startDef:'#60a5fa', endDef:'#2563eb',  transKey:'cool_transparent',      breatheKey:'cool_breathe',      prefix:'cool'      },
+      { id:'heat_cool', emoji:'🔄', label:'Heat / Cool', startKey:'heat_cool_start', endKey:'heat_cool_end',  startDef:'#a78bfa', endDef:'#7c3aed',  transKey:'heat_cool_transparent', breatheKey:'heat_cool_breathe', prefix:'heat_cool' },
+      { id:'dry',       emoji:'💧', label:'Dry',         startKey:'dry_start',       endKey:'dry_end',        startDef:'#fbbf24', endDef:'#f59e0b',  transKey:'dry_transparent',       breatheKey:'dry_breathe',       prefix:'dry'       },
+      { id:'fan_only',  emoji:'🌀', label:'Fan Only',    startKey:'fan_only_start',  endKey:'fan_only_end',   startDef:'#34d399', endDef:'#10b981',  transKey:'fan_only_transparent',  breatheKey:'fan_only_breathe',  prefix:'fan_only'  },
+      { id:'idle',      emoji:'⏸️', label:'Idle / Off', startKey:'idle_start',      endKey:'idle_end',       startDef:'#374151', endDef:'#111827',  transKey:'idle_transparent',      breatheKey:'idle_breathe',      prefix:'idle'      },
     ];
 
     const TEXT_FIELDS = [
@@ -973,6 +1010,27 @@ class CATThermostatCardEditor extends HTMLElement {
       gridRow.appendChild(this._makeColourCard(mode.startKey, 'Start', 'Gradient start colour', mode.startDef));
       gridRow.appendChild(this._makeColourCard(mode.endKey,   'End',   'Gradient end colour',   mode.endDef));
       group.appendChild(gridRow);
+
+      // Per-mode text / icon / button colour overrides
+      const colourSubLabel = document.createElement('div');
+      colourSubLabel.style.cssText = 'font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;color:var(--secondary-text-color,#8e8e93);padding:10px 12px 4px;border-top:0.5px solid var(--divider-color,rgba(0,0,0,0.08));';
+      colourSubLabel.textContent = 'Text, Icon & Buttons — leave blank to use global colours';
+      group.appendChild(colourSubLabel);
+
+      const perColourGrid = document.createElement('div');
+      perColourGrid.className = 'colour-grid';
+      perColourGrid.id = `per-colour-grid-${mode.id}`;
+      if (isGlass) { perColourGrid.style.opacity = '0.38'; perColourGrid.style.pointerEvents = 'none'; }
+      perColourGrid.style.transition = 'opacity 0.22s';
+
+      for (const pmc of PER_MODE_COLOURS) {
+        const perKey = `${mode.prefix}_${pmc.suffix}`;
+        const globalVal = this._config[pmc.globalKey] || '#ffffff';
+        perColourGrid.appendChild(
+          this._makeColourCard(perKey, pmc.label, `${pmc.desc} (global: ${globalVal})`, globalVal, true)
+        );
+      }
+      group.appendChild(perColourGrid);
       groupWrap.appendChild(group);
       modeContainer.appendChild(groupWrap);
 
@@ -983,6 +1041,8 @@ class CATThermostatCardEditor extends HTMLElement {
         const on = glassInput.checked;
         gridRow.style.opacity       = on ? '0.38' : '1';
         gridRow.style.pointerEvents = on ? 'none' : '';
+        perColourGrid.style.opacity       = on ? '0.38' : '1';
+        perColourGrid.style.pointerEvents = on ? 'none' : '';
         glassBadge.classList.toggle('visible', on);
         this._update(mode.transKey, on);
       });
@@ -1014,7 +1074,7 @@ class CATThermostatCardEditor extends HTMLElement {
   // ─────────────────────────────────────────────────────────────────
   //  Build a single colour card
   // ─────────────────────────────────────────────────────────────────
-  _makeColourCard(key, label, desc, defaultVal) {
+  _makeColourCard(key, label, desc, defaultVal, clearable = false) {
     const saved     = this._config[key] || '';
     const swatch    = saved || defaultVal;
 
@@ -1033,7 +1093,7 @@ class CATThermostatCardEditor extends HTMLElement {
           <div class="colour-dot" style="background:${swatch}"></div>
           <input class="colour-hex" type="text" value="${saved}"
                  maxlength="7" placeholder="${defaultVal}" spellcheck="false">
-          <span class="colour-edit-icon">✎</span>
+          ${clearable ? `<button class="colour-clear" title="Reset to global" style="background:none;border:none;cursor:pointer;font-size:13px;padding:0;color:var(--secondary-text-color,#8e8e93);opacity:${saved ? '1' : '0.3'};" tabindex="-1">✕</button>` : `<span class="colour-edit-icon">✎</span>`}
         </div>
       </div>`;
 
@@ -1048,6 +1108,10 @@ class CATThermostatCardEditor extends HTMLElement {
       if (/^#[0-9a-fA-F]{6}$/.test(val)) picker.value = val;
       hexInput.value           = val;
       this._update(key, val);
+      if (clearable) {
+        const clr = card.querySelector('.colour-clear');
+        if (clr) clr.style.opacity = '1';
+      }
     };
 
     picker.addEventListener('input',  () => apply(picker.value));
@@ -1061,6 +1125,20 @@ class CATThermostatCardEditor extends HTMLElement {
       if (!/^#[0-9a-fA-F]{6}$/.test(hexInput.value.trim())) hexInput.value = cur;
     });
     hexInput.addEventListener('keydown', e => { if (e.key === 'Enter') hexInput.blur(); });
+
+    if (clearable) {
+      const clrBtn = card.querySelector('.colour-clear');
+      clrBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        hexInput.value            = '';
+        preview.style.background  = defaultVal;
+        dot.style.background      = defaultVal;
+        picker.value              = defaultVal;
+        clrBtn.style.opacity      = '0.3';
+        this._update(key, '');
+      });
+    }
 
     return card;
   }
@@ -1076,13 +1154,18 @@ class CATThermostatCardEditor extends HTMLElement {
     root.querySelectorAll('.colour-card').forEach(card => {
       const key   = card.dataset.key;
       const saved = this._config[key] || '';
-      const def   = card.querySelector('.colour-hex').placeholder;
+      const hexEl = card.querySelector('.colour-hex');
+      const def   = hexEl ? hexEl.placeholder : '#ffffff';
       const sw    = saved || def;
-      card.querySelector('.colour-swatch-preview').style.background = sw;
-      card.querySelector('.colour-dot').style.background            = sw;
-      const p = card.querySelector('input[type=color]');
-      if (/^#[0-9a-fA-F]{6}$/.test(sw)) p.value = sw;
-      card.querySelector('.colour-hex').value = saved;
+      const preview = card.querySelector('.colour-swatch-preview');
+      const dot     = card.querySelector('.colour-dot');
+      const picker  = card.querySelector('input[type=color]');
+      const clrBtn  = card.querySelector('.colour-clear');
+      if (preview) preview.style.background = sw;
+      if (dot)     dot.style.background     = sw;
+      if (picker && /^#[0-9a-fA-F]{6}$/.test(sw)) picker.value = sw;
+      if (hexEl)   hexEl.value = saved;
+      if (clrBtn)  clrBtn.style.opacity = saved ? '1' : '0.3';
     });
 
     // Glass toggles + grid opacity
