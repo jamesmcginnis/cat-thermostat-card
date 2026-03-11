@@ -1,6 +1,6 @@
 # CAT Thermostat Card
 
-A sleek, fully customisable thermostat card for Home Assistant with animated mode icons, per-mode gradient backgrounds, and a complete Visual Editor — no YAML required.
+A sleek, fully customisable thermostat card for Home Assistant with animated mode icons, per-mode gradient backgrounds, per-mode glass transparency, breathing glow effects, and a complete iOS-style Visual Editor — no YAML required.
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=jamesmcginnis&repository=cat-thermostat-card&category=plugin)
 
@@ -15,7 +15,8 @@ A sleek, fully customisable thermostat card for Home Assistant with animated mod
 
 - **Animated icons** — built-in flame, snowflake, spinning fan, pulsing heat/cool, and power symbol; swap any for any MDI icon
 - **Per-mode gradients** — unique two-colour background for heating, cooling, heat/cool, dry, fan only, and idle/off; all 12 colours individually customisable
-- **Idle icon behaviour** — choose whether the power icon shows when idle, or only when the thermostat is truly off (with the mode icon shown dimmed while idle)
+- **Per-mode glass / transparency** — replace any mode's gradient with a frosted-glass transparent background and subtle white outline, independently per mode
+- **Per-mode breathing glow** — each mode can softly pulse with a coloured glow matched to that mode's palette, independently configurable
 - **Power toggle** — tap the mode icon to turn on or off; configure exactly which HVAC mode it powers on to
 - **+/− temperature controls** — adjust the target in 0.5° increments directly from the card
-- **Full Visual Editor** — three-tab editor with live gradient previews, colour pickers, icon selectors, and all controls; no YAML needed
+- **Full Visual Editor** — iOS-style three-tab editor with live gradient previews, colour pickers, glass and breathe toggles per mode, icon selectors, and all controls; no YAML needed
