@@ -37,7 +37,7 @@ class CATThermostatCard extends HTMLElement {
       // Icon colour
       icon_color: '#ffffff',
       // Button colours
-      btn_bg_color:   '#ffffff',
+      btn_bg_color:   '#ffffff40',
       btn_icon_color: '#ffffff',
       // Show +/- controls
       show_controls: true,
@@ -391,19 +391,25 @@ class CATThermostatCard extends HTMLElement {
       this.config[`${pfx}_${perModeKey}`] || this.config[globalKey] || hardDefault;
 
     // ── Button colours ──────────────────────────────────────────────
-    const btnBg   = mc('btn_bg_color',   'btn_bg_color',   '#ffffff');
+    const btnBg   = mc('btn_bg_color',   'btn_bg_color',   '#ffffff40');
     const btnIcon = mc('btn_icon_color', 'btn_icon_color', '#ffffff');
 
-    // Convert hex to rgba so we keep a translucent glass look at 25% opacity
-    const hexToRgba = (hex, alpha) => {
-      const r = parseInt(hex.slice(1, 3), 16);
-      const g = parseInt(hex.slice(3, 5), 16);
-      const b = parseInt(hex.slice(5, 7), 16);
-      return `rgba(${r},${g},${b},${alpha})`;
+    // Resolve button background:
+    // 8-digit hex (#RRGGBBAA) → use directly (CSS4 native support)
+    // 6-digit hex (#RRGGBB)   → apply at 25% opacity for backwards compat
+    const resolveBtnBg = (val) => {
+      if (/^#[0-9a-fA-F]{8}$/.test(val)) return val;
+      if (/^#[0-9a-fA-F]{6}$/.test(val)) {
+        const r = parseInt(val.slice(1,3),16);
+        const g = parseInt(val.slice(3,5),16);
+        const b = parseInt(val.slice(5,7),16);
+        return `rgba(${r},${g},${b},0.25)`;
+      }
+      return 'rgba(255,255,255,0.25)';
     };
 
     this.shadowRoot.querySelectorAll('.btn').forEach(btn => {
-      btn.style.background = hexToRgba(btnBg, 0.25);
+      btn.style.background = resolveBtnBg(btnBg);
       btn.style.color      = btnIcon;
     });
 
@@ -533,7 +539,7 @@ class CATThermostatCardEditor extends HTMLElement {
       { suffix:'target_label_color',  label:'Status Label',    desc:'"Heating to", "Cooling to" …',    globalKey:'target_label_color'  },
       { suffix:'target_temp_color',   label:'Target Temp',     desc:'Setpoint value',                  globalKey:'target_temp_color'   },
       { suffix:'icon_color',          label:'Mode Icon',       desc:'Animated HVAC state icon',        globalKey:'icon_color'          },
-      { suffix:'btn_bg_color',        label:'Button Bg',       desc:'+/− background (25% opacity)',    globalKey:'btn_bg_color'        },
+      { suffix:'btn_bg_color',        label:'Button Bg',       desc:'+/− background colour + opacity', globalKey:'btn_bg_color',        alpha:true },
       { suffix:'btn_icon_color',      label:'Button Symbol',   desc:'+/− icon colour',                 globalKey:'btn_icon_color'      },
     ];
 
@@ -555,8 +561,8 @@ class CATThermostatCardEditor extends HTMLElement {
 
     const ICON_FIELDS = [
       { key:'icon_color',      label:'Mode Icon',         desc:'Animated HVAC state icon',          def:'#ffffff' },
-      { key:'btn_bg_color',    label:'Button Background', desc:'Rendered at 25% opacity',           def:'#ffffff' },
-      { key:'btn_icon_color',  label:'Button Symbol',     desc:'+/− icon colour',                   def:'#ffffff' },
+      { key:'btn_bg_color',    label:'Button Background', desc:'+/− button background colour + opacity', def:'#ffffff40', alpha:true },
+      { key:'btn_icon_color',  label:'Button Symbol',     desc:'+/− icon colour',                        def:'#ffffff' },
     ];
 
     // ── Icon select helper ───────────────────────────────────────────
@@ -1025,9 +1031,9 @@ class CATThermostatCardEditor extends HTMLElement {
 
       for (const pmc of PER_MODE_COLOURS) {
         const perKey = `${mode.prefix}_${pmc.suffix}`;
-        const globalVal = this._config[pmc.globalKey] || '#ffffff';
+        const globalVal = this._config[pmc.globalKey] || (pmc.alpha ? '#ffffff40' : '#ffffff');
         perColourGrid.appendChild(
-          this._makeColourCard(perKey, pmc.label, `${pmc.desc} (global: ${globalVal})`, globalVal, true)
+          this._makeColourCard(perKey, pmc.label, `${pmc.desc} (global: ${globalVal})`, globalVal, true, !!pmc.alpha)
         );
       }
       group.appendChild(perColourGrid);
@@ -1065,7 +1071,7 @@ class CATThermostatCardEditor extends HTMLElement {
 
     // ── Build icon/button colour grid ─────────────────────────────
     const iconGrid = this.shadowRoot.getElementById('icon-grid');
-    for (const f of ICON_FIELDS) iconGrid.appendChild(this._makeColourCard(f.key, f.label, f.desc, f.def));
+    for (const f of ICON_FIELDS) iconGrid.appendChild(this._makeColourCard(f.key, f.label, f.desc, f.def, false, !!f.alpha));
 
     this._bindStaticEvents();
     this._syncUI();
@@ -1074,27 +1080,43 @@ class CATThermostatCardEditor extends HTMLElement {
   // ─────────────────────────────────────────────────────────────────
   //  Build a single colour card
   // ─────────────────────────────────────────────────────────────────
-  _makeColourCard(key, label, desc, defaultVal, clearable = false) {
-    const saved     = this._config[key] || '';
-    const swatch    = saved || defaultVal;
+  _makeColourCard(key, label, desc, defaultVal, clearable = false, alphaSupport = false) {
+    const saved  = this._config[key] || '';
+    const swatch = saved || defaultVal;
+
+    // Convert 8-digit hex to rgba so CSS preview shows alpha correctly
+    const toPreviewCss = (hex) => {
+      if (/^#[0-9a-fA-F]{8}$/.test(hex)) {
+        const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16);
+        const b = parseInt(hex.slice(5,7),16), a = (parseInt(hex.slice(7,9),16)/255).toFixed(3);
+        return `rgba(${r},${g},${b},${a})`;
+      }
+      return hex;
+    };
+    // Strip alpha for the native color picker (only handles #RRGGBB)
+    const toPickerVal = (hex) => /^#[0-9a-fA-F]{8}$/.test(hex) ? hex.slice(0,7) : (hex || '#ffffff');
 
     const card = document.createElement('div');
     card.className   = 'colour-card';
     card.dataset.key = key;
     card.innerHTML = `
       <label class="colour-swatch">
-        <div class="colour-swatch-preview" style="background:${swatch}"></div>
-        <input type="color" value="${swatch}">
+        <div class="colour-swatch-preview" style="background:${toPreviewCss(swatch)}"></div>
+        <input type="color" value="${toPickerVal(swatch)}">
       </label>
       <div class="colour-info">
         <div class="colour-label">${label}</div>
         <div class="colour-desc">${desc}</div>
         <div class="colour-hex-row">
-          <div class="colour-dot" style="background:${swatch}"></div>
+          <div class="colour-dot" style="background:${toPreviewCss(swatch)}"></div>
           <input class="colour-hex" type="text" value="${saved}"
-                 maxlength="7" placeholder="${defaultVal}" spellcheck="false">
-          ${clearable ? `<button class="colour-clear" title="Reset to global" style="background:none;border:none;cursor:pointer;font-size:13px;padding:0;color:var(--secondary-text-color,#8e8e93);opacity:${saved ? '1' : '0.3'};" tabindex="-1">✕</button>` : `<span class="colour-edit-icon">✎</span>`}
+                 maxlength="${alphaSupport ? 9 : 7}"
+                 placeholder="${defaultVal}" spellcheck="false">
+          ${clearable
+            ? `<button class="colour-clear" title="Reset to global" style="background:none;border:none;cursor:pointer;font-size:13px;padding:0;color:var(--secondary-text-color,#8e8e93);opacity:${saved ? '1' : '0.3'};" tabindex="-1">✕</button>`
+            : `<span class="colour-edit-icon">✎</span>`}
         </div>
+        ${alphaSupport ? `<div class="colour-desc" style="margin-top:3px;font-size:9px;color:#007AFF;">💡 Type #00000000 for fully transparent</div>` : ''}
       </div>`;
 
     const picker   = card.querySelector('input[type=color]');
@@ -1102,10 +1124,11 @@ class CATThermostatCardEditor extends HTMLElement {
     const preview  = card.querySelector('.colour-swatch-preview');
     const dot      = card.querySelector('.colour-dot');
 
-    const apply = (val) => {
-      preview.style.background = val;
-      dot.style.background     = val;
-      if (/^#[0-9a-fA-F]{6}$/.test(val)) picker.value = val;
+    const applyVal = (val) => {
+      const css = toPreviewCss(val);
+      preview.style.background = css;
+      dot.style.background     = css;
+      picker.value             = toPickerVal(val);
       hexInput.value           = val;
       this._update(key, val);
       if (clearable) {
@@ -1114,15 +1137,27 @@ class CATThermostatCardEditor extends HTMLElement {
       }
     };
 
-    picker.addEventListener('input',  () => apply(picker.value));
-    picker.addEventListener('change', () => apply(picker.value));
+    // When picker changes, preserve existing alpha digits if present
+    const pickerChanged = () => {
+      const currentHex = hexInput.value.trim();
+      const alpha = (alphaSupport && /^#[0-9a-fA-F]{8}$/.test(currentHex))
+        ? currentHex.slice(7, 9) : '';
+      applyVal(picker.value + alpha);
+    };
+    picker.addEventListener('input',  pickerChanged);
+    picker.addEventListener('change', pickerChanged);
+
     hexInput.addEventListener('input', () => {
       const v = hexInput.value.trim();
-      if (/^#[0-9a-fA-F]{6}$/.test(v)) apply(v);
+      const ok6 = /^#[0-9a-fA-F]{6}$/.test(v);
+      const ok8 = /^#[0-9a-fA-F]{8}$/.test(v);
+      if (ok6 || ok8) applyVal(v);
     });
     hexInput.addEventListener('blur', () => {
+      const v   = hexInput.value.trim();
       const cur = this._config[key] || defaultVal;
-      if (!/^#[0-9a-fA-F]{6}$/.test(hexInput.value.trim())) hexInput.value = cur;
+      const ok  = /^#[0-9a-fA-F]{6}$/.test(v) || (alphaSupport && /^#[0-9a-fA-F]{8}$/.test(v));
+      if (!ok) hexInput.value = cur;
     });
     hexInput.addEventListener('keydown', e => { if (e.key === 'Enter') hexInput.blur(); });
 
@@ -1132,9 +1167,9 @@ class CATThermostatCardEditor extends HTMLElement {
         e.preventDefault();
         e.stopPropagation();
         hexInput.value            = '';
-        preview.style.background  = defaultVal;
-        dot.style.background      = defaultVal;
-        picker.value              = defaultVal;
+        preview.style.background  = toPreviewCss(defaultVal);
+        dot.style.background      = toPreviewCss(defaultVal);
+        picker.value              = toPickerVal(defaultVal);
         clrBtn.style.opacity      = '0.3';
         this._update(key, '');
       });
@@ -1152,20 +1187,31 @@ class CATThermostatCardEditor extends HTMLElement {
 
     // Colour cards
     root.querySelectorAll('.colour-card').forEach(card => {
-      const key   = card.dataset.key;
-      const saved = this._config[key] || '';
-      const hexEl = card.querySelector('.colour-hex');
-      const def   = hexEl ? hexEl.placeholder : '#ffffff';
-      const sw    = saved || def;
+      const key     = card.dataset.key;
+      const saved   = this._config[key] || '';
+      const hexEl   = card.querySelector('.colour-hex');
+      const def     = hexEl ? hexEl.placeholder : '#ffffff';
+      const sw      = saved || def;
       const preview = card.querySelector('.colour-swatch-preview');
       const dot     = card.querySelector('.colour-dot');
       const picker  = card.querySelector('input[type=color]');
       const clrBtn  = card.querySelector('.colour-clear');
-      if (preview) preview.style.background = sw;
-      if (dot)     dot.style.background     = sw;
-      if (picker && /^#[0-9a-fA-F]{6}$/.test(sw)) picker.value = sw;
-      if (hexEl)   hexEl.value = saved;
-      if (clrBtn)  clrBtn.style.opacity = saved ? '1' : '0.3';
+
+      const toPreview = (hex) => {
+        if (/^#[0-9a-fA-F]{8}$/.test(hex)) {
+          const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16);
+          const b = parseInt(hex.slice(5,7),16), a = (parseInt(hex.slice(7,9),16)/255).toFixed(3);
+          return `rgba(${r},${g},${b},${a})`;
+        }
+        return hex;
+      };
+      const toPicker = (hex) => /^#[0-9a-fA-F]{8}$/.test(hex) ? hex.slice(0,7) : hex;
+
+      if (preview) preview.style.background = toPreview(sw);
+      if (dot)     dot.style.background     = toPreview(sw);
+      if (picker)  picker.value             = toPicker(sw) || '#ffffff';
+      if (hexEl)   hexEl.value              = saved;
+      if (clrBtn)  clrBtn.style.opacity     = saved ? '1' : '0.3';
     });
 
     // Glass toggles + grid opacity
