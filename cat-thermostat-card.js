@@ -380,7 +380,7 @@ class CATThermostatCard extends HTMLElement {
     // ── Show / hide +/- controls ────────────────────────────────────
     const controlsEl = this.shadowRoot.querySelector('.controls');
     if (controlsEl) {
-      controlsEl.style.display = (this.config.show_controls === false) ? 'none' : 'flex';
+      controlsEl.style.visibility = (this.config.show_controls === false) ? 'hidden' : 'visible';
     }
 
     // ── Per-mode colour resolver (falls back to global then hard default) ──
