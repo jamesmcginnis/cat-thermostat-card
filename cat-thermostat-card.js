@@ -49,8 +49,13 @@ class CATThermostatCard extends HTMLElement {
       icon_fan_only:  '',
       icon_idle:      '',
       icon_off:       '',
-      // Transparent / glass background (overrides all gradient colours)
-      bg_transparent: false,
+      // Per-mode glass/transparent background (overrides gradient for that mode)
+      heat_transparent:      false,
+      cool_transparent:      false,
+      heat_cool_transparent: false,
+      dry_transparent:       false,
+      fan_only_transparent:  false,
+      idle_transparent:      false,
       // HVAC mode to restore when turning the thermostat on
       // 'auto' = pick automatically from the entity's available modes (original behaviour)
       turn_on_mode:   'auto',
@@ -296,7 +301,14 @@ class CATThermostatCard extends HTMLElement {
       this.config.idle_start || '#374151',
       this.config.idle_end   || '#111827',
     ];
-    if (this.config.bg_transparent) {
+
+    // Per-mode glass: map display mode → config transparent key
+    const _glassKey = { heating:'heat_transparent', cooling:'cool_transparent',
+                        heat_cool:'heat_cool_transparent', dry:'dry_transparent',
+                        fan_only:'fan_only_transparent', idle:'idle_transparent' };
+    const isGlass = !!this.config[_glassKey[mode] || ''];
+
+    if (isGlass) {
       card.style.background = 'transparent';
       card.style.border     = '1px solid rgba(255,255,255,0.15)';
     } else {
@@ -416,19 +428,28 @@ class CATThermostatCard extends HTMLElement {
 
 class CATThermostatCardEditor extends HTMLElement {
 
+  constructor() {
+    super();
+    this.attachShadow({ mode: 'open' });
+    this._config      = {};
+    this._hass        = null;
+    this._initialized = false;
+  }
+
   setConfig(config) {
-    this._config = config || {};
-    // If already rendered, just update the stored config without re-rendering.
-    // Re-rendering would destroy the focused input after every keystroke.
-    if (this._initialized) return;
-    if (this._hass) this._render();
+    this._config = { ...config };
+    if (!this._initialized && this._hass) this._render();
+    else if (this._initialized) this._syncUI();
   }
 
   set hass(hass) {
     this._hass = hass;
-    this._render();
+    if (!this._initialized) this._render();
   }
 
+  // ─────────────────────────────────────────────────────────────────
+  //  Render (once)
+  // ─────────────────────────────────────────────────────────────────
   _render() {
     if (!this._hass || !this._config || this._initialized) return;
     this._initialized = true;
@@ -437,574 +458,629 @@ class CATThermostatCardEditor extends HTMLElement {
     const hs = this._hass.states;
     const climateEntities = Object.keys(hs).filter(e => e.startsWith('climate.'));
 
-    // ── Template helpers ──────────────────────────────────────────────
+    // ── Mode groups for the Colours tab ─────────────────────────────
+    const MODES = [
+      { id:'heat',      emoji:'🔥', label:'Heating',     startKey:'heat_start',      endKey:'heat_end',       startDef:'#fb923c', endDef:'#f97316',  transKey:'heat_transparent'      },
+      { id:'cool',      emoji:'❄️', label:'Cooling',     startKey:'cool_start',      endKey:'cool_end',       startDef:'#60a5fa', endDef:'#2563eb',  transKey:'cool_transparent'      },
+      { id:'heat_cool', emoji:'🔄', label:'Heat / Cool', startKey:'heat_cool_start', endKey:'heat_cool_end',  startDef:'#a78bfa', endDef:'#7c3aed',  transKey:'heat_cool_transparent' },
+      { id:'dry',       emoji:'💧', label:'Dry',         startKey:'dry_start',       endKey:'dry_end',        startDef:'#fbbf24', endDef:'#f59e0b',  transKey:'dry_transparent'       },
+      { id:'fan_only',  emoji:'🌀', label:'Fan Only',    startKey:'fan_only_start',  endKey:'fan_only_end',   startDef:'#34d399', endDef:'#10b981',  transKey:'fan_only_transparent'  },
+      { id:'idle',      emoji:'⏸️', label:'Idle / Off', startKey:'idle_start',      endKey:'idle_end',       startDef:'#374151', endDef:'#111827',  transKey:'idle_transparent'      },
+    ];
 
-    // Gradient pair row: swatch | preview bar | swatch
-    const gradRow = (emoji, title, startKey, endKey, startDef, endDef) => `
-      <div class="grad-group">
-        <div class="grad-label">${emoji} ${title}</div>
-        <div class="grad-row">
-          <label class="swatch-wrap">
-            <span class="swatch-hint">Start</span>
-            <input data-key="${startKey}" type="color"
-                   value="${c[startKey] || startDef}" class="swatch grad-swatch">
-          </label>
-          <div class="grad-preview" id="gp-${startKey}"
-               style="background:linear-gradient(90deg,${c[startKey]||startDef},${c[endKey]||endDef})"></div>
-          <label class="swatch-wrap">
-            <span class="swatch-hint">End</span>
-            <input data-key="${endKey}" type="color"
-                   value="${c[endKey] || endDef}" class="swatch grad-swatch">
-          </label>
-        </div>
-      </div>`;
+    const TEXT_FIELDS = [
+      { key:'current_temp_color',  label:'Current Temp',   desc:'Large temperature reading',       def:'#ffffff' },
+      { key:'name_color',          label:'Card Name',       desc:'Name shown below temperature',    def:'#ffffff' },
+      { key:'target_label_color',  label:'Status Label',    desc:'"Heating to", "Cooling to" …',    def:'#ffffff' },
+      { key:'target_temp_color',   label:'Target Temp',     desc:'Setpoint value',                  def:'#ffffff' },
+    ];
 
-    // Single colour row: label | preview dot | hex code | swatch
-    const colorRow = (emoji, title, key, def) => {
-      const val = c[key] || def;
-      return `
-        <label class="color-row">
-          <span class="color-label">${emoji}&nbsp;${title}</span>
-          <span class="color-right">
-            <span class="color-dot" style="background:${val}"></span>
-            <span class="color-hex" id="hex-${key}">${val.toUpperCase()}</span>
-            <input data-key="${key}" type="color" value="${val}" class="swatch color-swatch">
-          </span>
-        </label>`;
-    };
+    const ICON_FIELDS = [
+      { key:'icon_color',      label:'Mode Icon',         desc:'Animated HVAC state icon',          def:'#ffffff' },
+      { key:'btn_bg_color',    label:'Button Background', desc:'Rendered at 25% opacity',           def:'#ffffff' },
+      { key:'btn_icon_color',  label:'Button Symbol',     desc:'+/− icon colour',                   def:'#ffffff' },
+    ];
 
-    // Icon select row
-    const iconRow = (emoji, title, key, placeholder, opts) => `
-      <div class="icon-row">
-        <div class="icon-row-label">${emoji}&nbsp;${title}</div>
-        <select data-key="${key}" class="sel">
+    // ── Icon select helper ───────────────────────────────────────────
+    const iconSelect = (emoji, title, key, placeholder, opts) => `
+      <div class="ios-row" style="flex-direction:column;align-items:flex-start;gap:8px;padding:14px 16px;">
+        <div class="ios-row-label" style="font-size:15px;font-weight:500;color:var(--primary-text-color)">${emoji} ${title}</div>
+        <select data-key="${key}" class="ios-select">
           <option value="">✨ ${placeholder}</option>
-          ${opts.map(([v,l]) =>
-            `<option value="${v}" ${c[key]===v?'selected':''}>${l}</option>`).join('')}
+          ${opts.map(([v,l]) => `<option value="${v}" ${c[key]===v?'selected':''}>${l}</option>`).join('')}
         </select>
       </div>`;
 
-    // ── Full HTML ─────────────────────────────────────────────────────
-
-    this.innerHTML = `
+    // ─────────────────────────────────────────────────────────────────
+    this.shadowRoot.innerHTML = `
       <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
         :host {
           display: block;
-          font-family: var(--paper-font-body1_-_font-family, sans-serif);
-          font-size: 13px;
-          color: var(--primary-text-color, #e5e7eb);
+          font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif;
+          font-size: 15px;
+          color: var(--primary-text-color);
+          background: var(--secondary-background-color, #f2f2f7);
         }
 
-        /* ─ Tab bar ─ */
-        .tabs {
+        /* ── Tab bar ── */
+        .tab-bar {
           display: flex;
-          gap: 4px;
-          background: var(--secondary-background-color, #1a1a1a);
-          border-radius: 10px;
-          padding: 4px;
-          margin-bottom: 14px;
+          background: var(--card-background-color, #fff);
+          border-bottom: 1px solid var(--divider-color, rgba(0,0,0,0.1));
+          padding: 0 16px;
+          gap: 0;
+          position: sticky;
+          top: 0;
+          z-index: 10;
         }
-        .tab {
+        .tab-pill {
           flex: 1;
-          padding: 9px 6px;
+          padding: 14px 8px 12px;
           border: none;
-          border-radius: 7px;
           background: transparent;
-          color: var(--secondary-text-color, #9ca3af);
-          font-size: 12px;
+          color: var(--secondary-text-color, #8e8e93);
+          font-size: 13px;
           font-weight: 600;
           cursor: pointer;
-          transition: background 0.18s, color 0.18s;
+          letter-spacing: -0.1px;
+          border-bottom: 2.5px solid transparent;
+          transition: color 0.18s, border-color 0.18s;
           white-space: nowrap;
+          font-family: inherit;
         }
-        .tab.active {
-          background: var(--primary-color, #6366f1);
-          color: #fff;
-        }
-        .tab:hover:not(.active) {
-          background: rgba(255,255,255,0.08);
-          color: var(--primary-text-color, #fff);
+        .tab-pill.active {
+          color: #007AFF;
+          border-bottom-color: #007AFF;
         }
 
-        /* ─ Panels ─ */
-        .panel { display: none; }
+        /* ── Panels ── */
+        .panel { display: none; padding: 22px 16px 32px; }
         .panel.active { display: block; }
 
-        /* ─ Section blocks ─ */
-        .section {
-          background: var(--secondary-background-color, #1e1e1e);
-          border: 1px solid var(--divider-color, #2d2d2d);
-          border-radius: 10px;
-          padding: 14px 14px 10px;
-          margin-bottom: 12px;
-        }
-        .section-title {
-          font-size: 10px;
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 1px;
-          color: var(--secondary-text-color, #6b7280);
-          margin-bottom: 12px;
-          padding-bottom: 8px;
-          border-bottom: 1px solid var(--divider-color, #2a2a2a);
-        }
-
-        /* ─ Generic field ─ */
-        .field { margin-bottom: 10px; }
-        .field:last-child { margin-bottom: 0; }
-        .field-label {
+        /* ── Section label (above card group) ── */
+        .group-label {
           font-size: 12px;
           font-weight: 600;
-          margin-bottom: 5px;
-          display: block;
-        }
-        .field-hint {
-          font-size: 11px;
-          font-weight: 400;
-          color: var(--secondary-text-color, #6b7280);
-          margin-left: 4px;
+          text-transform: uppercase;
+          letter-spacing: 0.04em;
+          color: var(--secondary-text-color, #8e8e93);
+          margin: 0 4px 6px;
         }
 
-        /* ─ Inputs ─ */
-        .inp, .sel {
-          width: 100%;
-          padding: 9px 10px;
-          background: var(--input-fill-color, #111111);
-          border: 1px solid var(--input-ink-color, #383838);
-          border-radius: 7px;
-          color: var(--primary-text-color, #fff);
-          font-size: 13px;
-          box-sizing: border-box;
-          transition: border-color 0.18s;
-        }
-        .inp:focus, .sel:focus {
-          outline: none;
-          border-color: var(--primary-color, #6366f1);
+        /* ── iOS card group ── */
+        .ios-group {
+          background: var(--card-background-color, #fff);
+          border-radius: 12px;
+          overflow: hidden;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+          margin-bottom: 22px;
         }
 
-        /* ─ Toggle row ─ */
-        .toggle-row {
+        /* ── Row inside a group ── */
+        .ios-row {
           display: flex;
           align-items: center;
-          justify-content: space-between;
-          padding: 4px 0 2px;
+          padding: 13px 16px;
+          border-bottom: 0.5px solid var(--divider-color, rgba(0,0,0,0.1));
+          min-height: 50px;
+          gap: 12px;
         }
-        .toggle-label {
+        .ios-row:last-child { border-bottom: none; }
+        .ios-row-label {
+          flex: 1;
+          font-size: 15px;
+          font-weight: 400;
+          color: var(--primary-text-color);
+          line-height: 1.35;
+        }
+        .ios-row-hint {
           font-size: 12px;
-          font-weight: 600;
+          color: var(--secondary-text-color, #8e8e93);
+          margin-top: 2px;
+          font-weight: 400;
         }
-        .toggle-switch {
-          position: relative;
-          width: 40px;
-          height: 22px;
-          flex-shrink: 0;
+
+        /* ── iOS text input ── */
+        .ios-input {
+          width: 100%;
+          background: transparent;
+          border: none;
+          outline: none;
+          font-size: 15px;
+          font-family: inherit;
+          color: var(--primary-text-color);
+          padding: 0;
+          text-align: right;
+          color: var(--secondary-text-color, #8e8e93);
         }
-        .toggle-switch input {
-          opacity: 0;
-          width: 0;
-          height: 0;
-          position: absolute;
-        }
-        .toggle-track {
-          position: absolute;
-          inset: 0;
-          border-radius: 22px;
-          background: var(--divider-color, #3a3a3a);
+        .ios-input::placeholder { color: var(--secondary-text-color, #c7c7cc); }
+
+        /* ── iOS select ── */
+        .ios-select {
+          width: 100%;
+          background: var(--secondary-background-color, rgba(118,118,128,0.12));
+          border: none;
+          outline: none;
+          font-size: 14px;
+          font-family: inherit;
+          color: var(--primary-text-color);
+          padding: 10px 12px;
+          border-radius: 9px;
           cursor: pointer;
-          transition: background 0.2s;
+          -webkit-appearance: none;
+          appearance: none;
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23888' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+          background-repeat: no-repeat;
+          background-position: right 12px center;
+          padding-right: 32px;
         }
-        .toggle-track::after {
+
+        /* ── iOS toggle switch ── */
+        .ios-toggle { position: relative; width: 51px; height: 31px; flex-shrink: 0; }
+        .ios-toggle input { position: absolute; opacity: 0; width: 0; height: 0; }
+        .ios-toggle-track {
+          position: absolute; inset: 0;
+          border-radius: 31px;
+          background: rgba(120,120,128,0.32);
+          cursor: pointer;
+          transition: background 0.26s ease;
+        }
+        .ios-toggle-track::after {
           content: '';
           position: absolute;
-          left: 3px;
-          top: 3px;
-          width: 16px;
-          height: 16px;
+          width: 27px; height: 27px;
+          top: 2px; left: 2px;
           border-radius: 50%;
           background: #fff;
-          transition: transform 0.2s;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.28);
+          transition: transform 0.26s ease;
         }
-        .toggle-switch input:checked + .toggle-track {
-          background: var(--primary-color, #6366f1);
-        }
-        .toggle-switch input:checked + .toggle-track::after {
-          transform: translateX(18px);
-        }
+        .ios-toggle input:checked + .ios-toggle-track { background: #34C759; }
+        .ios-toggle input:checked + .ios-toggle-track::after { transform: translateX(20px); }
 
-        /* ─ Gradient rows ─ */
-        .grad-group { margin-bottom: 12px; }
-        .grad-group:last-child { margin-bottom: 0; }
-        .grad-label {
-          font-size: 11px;
-          font-weight: 600;
-          text-transform: uppercase;
-          letter-spacing: 0.4px;
-          color: var(--secondary-text-color, #9ca3af);
-          margin-bottom: 6px;
-        }
-        .grad-row {
+        /* ── Segmented control ── */
+        .ios-segmented {
           display: flex;
-          align-items: center;
-          gap: 8px;
-        }
-        .swatch-wrap {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
+          background: rgba(118,118,128,0.2);
+          border-radius: 9px;
+          padding: 2px;
           gap: 2px;
-          cursor: pointer;
+          width: 100%;
         }
-        .swatch-hint {
-          font-size: 9px;
-          font-weight: 600;
-          text-transform: uppercase;
-          letter-spacing: 0.3px;
-          color: var(--secondary-text-color, #6b7280);
+        .ios-segmented input[type="radio"] { display: none; }
+        .ios-segmented label {
+          flex: 1; text-align: center; padding: 8px 4px;
+          font-size: 13px; font-weight: 500;
+          border-radius: 7px; cursor: pointer;
+          color: var(--primary-text-color);
+          transition: all 0.2s ease; white-space: nowrap;
+          font-family: inherit;
         }
-        .swatch {
-          border: 2px solid var(--divider-color, #3a3a3a);
-          border-radius: 7px;
-          cursor: pointer;
-          padding: 0;
-          background: none;
-        }
-        .swatch:hover { border-color: var(--primary-color, #6366f1); }
-        .grad-swatch { width: 44px; height: 38px; }
-        .grad-preview {
-          flex: 1;
-          height: 38px;
-          border-radius: 7px;
-          transition: background 0.25s;
+        .ios-segmented input:checked + label {
+          background: var(--card-background-color, #fff);
+          color: var(--primary-text-color);
+          box-shadow: 0 1px 4px rgba(0,0,0,0.18);
         }
 
-        /* ─ Single colour rows ─ */
-        .color-row {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 9px 0;
-          border-bottom: 1px solid var(--divider-color, #262626);
+        /* ── Colour grid ── */
+        .colour-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 10px;
+          padding: 12px;
+        }
+
+        /* ── Colour card (crow / leopard style) ── */
+        .colour-card {
+          border: 1px solid var(--divider-color, rgba(0,0,0,0.1));
+          border-radius: 11px;
+          overflow: hidden;
           cursor: pointer;
-          gap: 8px;
+          transition: box-shadow 0.15s, border-color 0.15s;
+          background: var(--card-background-color, #fff);
         }
-        .color-row:last-child { border-bottom: none; padding-bottom: 0; }
-        .color-label {
-          font-size: 12px;
-          font-weight: 600;
-          flex: 1;
+        .colour-card:hover {
+          box-shadow: 0 3px 12px rgba(0,0,0,0.12);
+          border-color: #007AFF;
         }
-        .color-right {
-          display: flex;
-          align-items: center;
-          gap: 8px;
+        .colour-card.glass-active { opacity: 0.38; pointer-events: none; }
+
+        .colour-swatch { height: 44px; width: 100%; display: block; position: relative; }
+        .colour-swatch input[type="color"] {
+          position: absolute; inset: 0; width: 100%; height: 100%;
+          opacity: 0; cursor: pointer; border: none; padding: 0;
+        }
+        .colour-swatch-preview { position: absolute; inset: 0; pointer-events: none; }
+        .colour-swatch::before {
+          content: ''; position: absolute; inset: 0; pointer-events: none;
+          background-image:
+            linear-gradient(45deg, #ccc 25%, transparent 25%),
+            linear-gradient(-45deg, #ccc 25%, transparent 25%),
+            linear-gradient(45deg, transparent 75%, #ccc 75%),
+            linear-gradient(-45deg, transparent 75%, #ccc 75%);
+          background-size: 8px 8px;
+          background-position: 0 0, 0 4px, 4px -4px, -4px 0px;
+          opacity: 0.28;
+        }
+        .colour-info { padding: 7px 9px 8px; }
+        .colour-label {
+          font-size: 11px; font-weight: 600;
+          color: var(--primary-text-color); letter-spacing: 0.01em; margin-bottom: 2px;
+        }
+        .colour-desc { font-size: 10px; color: var(--secondary-text-color, #8e8e93); margin-bottom: 4px; line-height: 1.3; }
+        .colour-hex-row { display: flex; align-items: center; gap: 4px; }
+        .colour-dot {
+          width: 11px; height: 11px; border-radius: 50%;
+          border: 1px solid rgba(0,0,0,0.12); flex-shrink: 0;
+        }
+        .colour-hex {
+          flex: 1; font-size: 11px; font-family: 'SF Mono', 'Menlo', monospace;
+          border: none; background: none; color: var(--secondary-text-color, #8e8e93);
+          padding: 0; width: 0; min-width: 0;
+        }
+        .colour-hex:focus { outline: none; color: var(--primary-text-color); }
+        .colour-edit-icon {
+          opacity: 0; transition: opacity 0.15s;
+          color: var(--secondary-text-color, #8e8e93); font-size: 13px; line-height: 1;
+        }
+        .colour-card:hover .colour-edit-icon { opacity: 1; }
+
+        /* ── Glass pill badge ── */
+        .glass-badge {
+          display: inline-flex; align-items: center; gap: 4px;
+          font-size: 11px; font-weight: 600;
+          color: #007AFF;
+          background: rgba(0,122,255,0.1);
+          border-radius: 20px; padding: 3px 9px;
+          letter-spacing: 0.01em;
           flex-shrink: 0;
+          opacity: 0; transition: opacity 0.18s;
+          pointer-events: none;
         }
-        .color-dot {
-          width: 14px;
-          height: 14px;
-          border-radius: 50%;
-          border: 1.5px solid rgba(255,255,255,0.2);
-          display: inline-block;
-          flex-shrink: 0;
-        }
-        .color-hex {
-          font-size: 11px;
-          font-weight: 700;
-          font-family: monospace;
-          color: var(--secondary-text-color, #9ca3af);
-          min-width: 52px;
-          text-align: right;
-        }
-        .color-swatch { width: 32px; height: 28px; border-radius: 6px; }
-
-        /* ─ Icon rows ─ */
-        .icon-row { margin-bottom: 10px; }
-        .icon-row:last-child { margin-bottom: 0; }
-        .icon-row-label {
-          font-size: 11px;
-          font-weight: 600;
-          text-transform: uppercase;
-          letter-spacing: 0.4px;
-          color: var(--secondary-text-color, #9ca3af);
-          margin-bottom: 5px;
-        }
-
-        /* ─ Info tip ─ */
-        .tip {
-          font-size: 11px;
-          line-height: 1.55;
-          color: var(--secondary-text-color, #9ca3af);
-          background: rgba(99,102,241,0.07);
-          border-left: 3px solid var(--primary-color, #6366f1);
-          border-radius: 0 6px 6px 0;
-          padding: 7px 10px;
-          margin-bottom: 12px;
-        }
-
-        /* ─ Divider within a section ─ */
-        .sub-divider {
-          border: none;
-          border-top: 1px dashed var(--divider-color, #2d2d2d);
-          margin: 10px 0;
-        }
+        .glass-badge.visible { opacity: 1; }
       </style>
 
-      <!-- ════ Tab bar ════ -->
-      <div class="tabs">
-        <button class="tab active" data-tab="general">⚙️ General</button>
-        <button class="tab" data-tab="colors">🎨 Colors</button>
-        <button class="tab" data-tab="icons">🔧 Icons</button>
+      <!-- ══ Tab bar ══ -->
+      <div class="tab-bar">
+        <button class="tab-pill active" data-tab="general">⚙️ General</button>
+        <button class="tab-pill" data-tab="colors">🎨 Colours</button>
+        <button class="tab-pill" data-tab="icons">🔧 Icons</button>
       </div>
 
-      <!-- ══════════ GENERAL PANEL ══════════ -->
+      <!-- ════════════ GENERAL PANEL ════════════ -->
       <div class="panel active" id="panel-general">
-        <div class="section">
-          <div class="section-title">Thermostat Setup</div>
 
-          <div class="field">
-            <label class="field-label">Climate Entity</label>
-            <select id="entity-select" class="sel">
-              <option value="">— Select a thermostat —</option>
+        <div class="group-label">Thermostat</div>
+        <div class="ios-group">
+          <div class="ios-row">
+            <div class="ios-row-label">Entity</div>
+            <select id="entity-select" class="ios-select" style="max-width:60%;text-align:right;">
+              <option value="">Select…</option>
               ${climateEntities.map(eid => `
                 <option value="${eid}" ${c.entity === eid ? 'selected' : ''}>
                   ${hs[eid].attributes.friendly_name || eid}
                 </option>`).join('')}
             </select>
           </div>
-
-          <div class="field">
-            <label class="field-label">
-              Display Name
-              <span class="field-hint">(leave blank to use entity name)</span>
-            </label>
-            <input id="name-input" class="inp" type="text"
+          <div class="ios-row">
+            <div class="ios-row-label">Display Name<div class="ios-row-hint">Leave blank to use entity name</div></div>
+            <input id="name-input" class="ios-input" type="text"
                    value="${c.name || ''}" placeholder="e.g. Living Room">
           </div>
         </div>
 
-        <div class="section">
-          <div class="section-title">Controls</div>
-          <div class="toggle-row">
-            <span class="toggle-label">➕ Show +/− Buttons</span>
-            <label class="toggle-switch">
+        <div class="group-label">Controls</div>
+        <div class="ios-group">
+          <div class="ios-row">
+            <div class="ios-row-label">Show +/− Buttons</div>
+            <label class="ios-toggle">
               <input id="show-controls-toggle" type="checkbox"
                      ${c.show_controls === false ? '' : 'checked'}>
-              <span class="toggle-track"></span>
+              <span class="ios-toggle-track"></span>
             </label>
           </div>
         </div>
 
-        <div class="section">
-          <div class="section-title">Background</div>
-          <div class="toggle-row">
-            <div>
-              <span class="toggle-label">🪟 Transparent / Glass</span>
-              <div style="font-size:11px;color:var(--secondary-text-color,#6b7280);margin-top:3px;">Removes all gradient colours — shows a subtle glass outline instead</div>
-            </div>
-            <label class="toggle-switch" style="flex-shrink:0;margin-left:12px;">
-              <input id="bg-transparent-toggle" type="checkbox"
-                     ${c.bg_transparent ? 'checked' : ''}>
-              <span class="toggle-track"></span>
-            </label>
-          </div>
-        </div>
-
-        <div class="section">
-          <div class="section-title">Power On Behaviour</div>
-          <div class="tip">Choose which HVAC mode is activated when you tap the icon to turn the thermostat on. Only modes supported by your device will actually be used — if your chosen mode is unavailable the card falls back automatically.</div>
-          <div class="field">
-            <label class="field-label">Turn On Mode</label>
-            <select id="turn-on-mode-select" class="sel">
-              <option value="auto"      ${(c.turn_on_mode||'auto')==='auto'      ?'selected':''}>🔀 Auto — pick best available mode</option>
-              <option value="heat_cool" ${(c.turn_on_mode||'')==='heat_cool'     ?'selected':''}>🔄 Heat / Cool (heat_cool)</option>
-              <option value="heat"      ${(c.turn_on_mode||'')==='heat'          ?'selected':''}>🔥 Heat</option>
-              <option value="cool"      ${(c.turn_on_mode||'')==='cool'          ?'selected':''}>❄️ Cool</option>
-              <option value="dry"       ${(c.turn_on_mode||'')==='dry'           ?'selected':''}>💧 Dry</option>
-              <option value="fan_only"  ${(c.turn_on_mode||'')==='fan_only'      ?'selected':''}>🌀 Fan Only</option>
+        <div class="group-label">Power On Mode</div>
+        <div class="ios-group">
+          <div class="ios-row" style="flex-direction:column;align-items:flex-start;gap:10px;padding:14px 16px;">
+            <div class="ios-row-hint" style="font-size:13px;">Which HVAC mode activates when tapping the icon to power on. Falls back automatically if unavailable.</div>
+            <select id="turn-on-mode-select" class="ios-select">
+              <option value="auto"      ${(c.turn_on_mode||'auto')==='auto'     ?'selected':''}>🔀 Auto — pick best available</option>
+              <option value="heat_cool" ${(c.turn_on_mode||'')==='heat_cool'    ?'selected':''}>🔄 Heat / Cool</option>
+              <option value="heat"      ${(c.turn_on_mode||'')==='heat'         ?'selected':''}>🔥 Heat</option>
+              <option value="cool"      ${(c.turn_on_mode||'')==='cool'         ?'selected':''}>❄️ Cool</option>
+              <option value="dry"       ${(c.turn_on_mode||'')==='dry'          ?'selected':''}>💧 Dry</option>
+              <option value="fan_only"  ${(c.turn_on_mode||'')==='fan_only'     ?'selected':''}>🌀 Fan Only</option>
             </select>
           </div>
         </div>
+
       </div>
 
-      <!-- ══════════ COLORS PANEL ══════════ -->
+      <!-- ════════════ COLOURS PANEL ════════════ -->
       <div class="panel" id="panel-colors">
+        <div id="mode-groups"></div>
 
-        <div class="section">
-          <div class="section-title">Background Gradients</div>
-          <div class="tip">Each mode shows a two-colour gradient. Click a swatch to change its colour — the preview bar updates live.</div>
-          ${gradRow('🔥','Heating',     'heat_start',      'heat_end',       '#fb923c','#f97316')}
-          ${gradRow('❄️','Cooling',     'cool_start',      'cool_end',       '#60a5fa','#2563eb')}
-          ${gradRow('🔄','Heat / Cool', 'heat_cool_start', 'heat_cool_end',  '#a78bfa','#7c3aed')}
-          ${gradRow('💧','Dry',         'dry_start',       'dry_end',        '#fbbf24','#f59e0b')}
-          ${gradRow('🌀','Fan Only',    'fan_only_start',  'fan_only_end',   '#34d399','#10b981')}
-          ${gradRow('⏸️','Idle / Off',  'idle_start',      'idle_end',       '#374151','#111827')}
+        <div class="group-label">Text</div>
+        <div class="ios-group">
+          <div class="colour-grid" id="text-grid"></div>
         </div>
 
-        <div class="section">
-          <div class="section-title">Text Colors</div>
-          ${colorRow('🌡️','Current Temperature', 'current_temp_color', '#ffffff')}
-          ${colorRow('🏷️','Card Name',           'name_color',         '#ffffff')}
-          ${colorRow('📝','Status Label',         'target_label_color', '#ffffff')}
-          ${colorRow('🎯','Target Temperature',   'target_temp_color',  '#ffffff')}
-        </div>
-
-        <div class="section">
-          <div class="section-title">Icon Color</div>
-          ${colorRow('✨','Mode Icon',            'icon_color',         '#ffffff')}
-        </div>
-
-        <div class="section">
-          <div class="section-title">Button Colors</div>
-          <div class="tip">The +/− buttons are rendered at 25% opacity of the chosen background colour to keep a translucent, glassy look on any gradient.</div>
-          ${colorRow('⬛','Button Background',    'btn_bg_color',        '#ffffff')}
-          ${colorRow('✏️','Button Symbol (+/−)', 'btn_icon_color',      '#ffffff')}
+        <div class="group-label">Icon &amp; Buttons</div>
+        <div class="ios-group">
+          <div class="colour-grid" id="icon-grid"></div>
         </div>
       </div>
 
-      <!-- ══════════ ICONS PANEL ══════════ -->
+      <!-- ════════════ ICONS PANEL ════════════ -->
       <div class="panel" id="panel-icons">
-        <div class="section">
-          <div class="section-title">Custom Mode Icons</div>
-          <div class="tip">Leave on "Default" to use the built-in animated icons. Selecting an MDI icon will replace the animation for that mode.</div>
-          ${iconRow('🔥','Heating',    'icon_heating',   'Default — Animated Flame', [
-            ['mdi:fire',                   'mdi:fire'],
-            ['mdi:fireplace',              'mdi:fireplace'],
-            ['mdi:radiator',               'mdi:radiator'],
-            ['mdi:sun-thermometer',        'mdi:sun-thermometer'],
-            ['mdi:white-balance-sunny',    'mdi:white-balance-sunny'],
-            ['mdi:thermometer-chevron-up', 'mdi:thermometer-chevron-up'],
-            ['mdi:home-thermometer',       'mdi:home-thermometer'],
+
+        <div class="group-label">Custom Mode Icons</div>
+        <div class="ios-group">
+          <div class="ios-row" style="padding:12px 16px 10px;">
+            <div class="ios-row-hint" style="font-size:13px;line-height:1.5;">Leave on "Default" to use built-in animated icons. Selecting an MDI icon replaces the animation for that mode.</div>
+          </div>
+          ${iconSelect('🔥','Heating',    'icon_heating',   'Default — Animated Flame', [
+            ['mdi:fire','mdi:fire'],['mdi:fireplace','mdi:fireplace'],
+            ['mdi:radiator','mdi:radiator'],['mdi:sun-thermometer','mdi:sun-thermometer'],
+            ['mdi:thermometer-chevron-up','mdi:thermometer-chevron-up'],
+            ['mdi:home-thermometer','mdi:home-thermometer'],
           ])}
-          ${iconRow('❄️','Cooling',    'icon_cooling',   'Default — Animated Snowflake', [
-            ['mdi:snowflake',                'mdi:snowflake'],
-            ['mdi:snowflake-variant',        'mdi:snowflake-variant'],
-            ['mdi:air-conditioner',          'mdi:air-conditioner'],
-            ['mdi:thermometer-chevron-down', 'mdi:thermometer-chevron-down'],
-            ['mdi:weather-snowy',            'mdi:weather-snowy'],
-            ['mdi:glacier',                  'mdi:glacier'],
+          ${iconSelect('❄️','Cooling',    'icon_cooling',   'Default — Animated Snowflake', [
+            ['mdi:snowflake','mdi:snowflake'],['mdi:snowflake-variant','mdi:snowflake-variant'],
+            ['mdi:air-conditioner','mdi:air-conditioner'],
+            ['mdi:thermometer-chevron-down','mdi:thermometer-chevron-down'],
+            ['mdi:weather-snowy','mdi:weather-snowy'],
           ])}
-          ${iconRow('🔄','Heat / Cool','icon_heat_cool', 'Default — Animated Hourglass', [
-            ['mdi:autorenew',        'mdi:autorenew'],
-            ['mdi:sync',             'mdi:sync'],
-            ['mdi:thermometer-auto', 'mdi:thermometer-auto'],
-            ['mdi:heat-wave',        'mdi:heat-wave'],
-            ['mdi:swap-vertical',    'mdi:swap-vertical'],
-            ['mdi:thermostat-auto',  'mdi:thermostat-auto'],
+          ${iconSelect('🔄','Heat / Cool','icon_heat_cool', 'Default — Animated Pulse', [
+            ['mdi:autorenew','mdi:autorenew'],['mdi:sync','mdi:sync'],
+            ['mdi:thermometer-auto','mdi:thermometer-auto'],
+            ['mdi:thermostat-auto','mdi:thermostat-auto'],
+            ['mdi:swap-vertical','mdi:swap-vertical'],
           ])}
-          ${iconRow('💧','Dry',        'icon_dry',       'Default — Water Drop', [
-            ['mdi:water-percent',     'mdi:water-percent'],
-            ['mdi:water-off',         'mdi:water-off'],
-            ['mdi:water-minus',       'mdi:water-minus'],
+          ${iconSelect('💧','Dry',        'icon_dry',       'Default — Water Drop', [
+            ['mdi:water-percent','mdi:water-percent'],['mdi:water-off','mdi:water-off'],
             ['mdi:air-humidifier-off','mdi:air-humidifier-off'],
-            ['mdi:weather-sunny',     'mdi:weather-sunny'],
-            ['mdi:weather-sunset',    'mdi:weather-sunset'],
+            ['mdi:weather-sunny','mdi:weather-sunny'],
           ])}
-          ${iconRow('🌀','Fan Only',   'icon_fan_only',  'Default — Spinning Fan', [
-            ['mdi:fan',           'mdi:fan'],
-            ['mdi:fan-speed-1',   'mdi:fan-speed-1'],
-            ['mdi:fan-speed-2',   'mdi:fan-speed-2'],
-            ['mdi:fan-speed-3',   'mdi:fan-speed-3'],
-            ['mdi:wind-turbine',  'mdi:wind-turbine'],
-            ['mdi:weather-windy', 'mdi:weather-windy'],
-            ['mdi:air-filter',    'mdi:air-filter'],
+          ${iconSelect('🌀','Fan Only',   'icon_fan_only',  'Default — Spinning Fan', [
+            ['mdi:fan','mdi:fan'],['mdi:fan-speed-1','mdi:fan-speed-1'],
+            ['mdi:fan-speed-2','mdi:fan-speed-2'],['mdi:fan-speed-3','mdi:fan-speed-3'],
+            ['mdi:weather-windy','mdi:weather-windy'],['mdi:air-filter','mdi:air-filter'],
           ])}
-          ${iconRow('⏸️','Idle (Standby)','icon_idle',  'Default — Thermostat Display', [
-            ['mdi:thermometer',              'mdi:thermometer'],
-            ['mdi:home-thermometer',         'mdi:home-thermometer'],
-            ['mdi:home-thermometer-outline', 'mdi:home-thermometer-outline'],
-            ['mdi:thermostat',               'mdi:thermostat'],
-            ['mdi:thermostat-box',           'mdi:thermostat-box'],
-            ['mdi:heat-wave',                'mdi:heat-wave'],
-            ['mdi:pause-circle-outline',     'mdi:pause-circle-outline'],
-            ['mdi:sleep',                    'mdi:sleep'],
+          ${iconSelect('⏸️','Idle',       'icon_idle',      'Default — Thermostat Display', [
+            ['mdi:thermometer','mdi:thermometer'],
+            ['mdi:home-thermometer','mdi:home-thermometer'],
+            ['mdi:home-thermometer-outline','mdi:home-thermometer-outline'],
+            ['mdi:thermostat','mdi:thermostat'],['mdi:sleep','mdi:sleep'],
           ])}
-          ${iconRow('⏹️','Off / Power','icon_off',       'Default — Power Symbol', [
-            ['mdi:power',         'mdi:power'],
-            ['mdi:power-off',     'mdi:power-off'],
-            ['mdi:power-standby', 'mdi:power-standby'],
-            ['mdi:stop-circle',   'mdi:stop-circle'],
-            ['mdi:sleep',         'mdi:sleep'],
-            ['mdi:cancel',        'mdi:cancel'],
+          ${iconSelect('⏹️','Off',        'icon_off',       'Default — Power Symbol', [
+            ['mdi:power','mdi:power'],['mdi:power-off','mdi:power-off'],
+            ['mdi:power-standby','mdi:power-standby'],
+            ['mdi:stop-circle','mdi:stop-circle'],['mdi:cancel','mdi:cancel'],
           ])}
         </div>
+
       </div>
     `;
 
-    this._bindEvents();
+    // ── Build per-mode gradient groups ──────────────────────────────
+    const modeContainer = this.shadowRoot.getElementById('mode-groups');
+    for (const mode of MODES) {
+      const isGlass = !!this._config[mode.transKey];
+
+      const groupWrap = document.createElement('div');
+      groupWrap.dataset.modeGroup = mode.id;
+
+      // Section label + glass badge
+      const labelRow = document.createElement('div');
+      labelRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin:0 4px 6px;';
+      labelRow.innerHTML = `
+        <span class="group-label" style="margin:0;">${mode.emoji} ${mode.label}</span>
+        <span class="glass-badge ${isGlass ? 'visible' : ''}" id="badge-${mode.id}">🪟 Glass</span>`;
+      groupWrap.appendChild(labelRow);
+
+      // Card group
+      const group = document.createElement('div');
+      group.className = 'ios-group';
+      group.style.marginBottom = '22px';
+
+      // Glass toggle row
+      const glassRow = document.createElement('div');
+      glassRow.className = 'ios-row';
+      glassRow.innerHTML = `
+        <div class="ios-row-label">
+          Transparent / Glass
+          <div class="ios-row-hint">Removes the gradient — shows a glass outline instead</div>
+        </div>
+        <label class="ios-toggle">
+          <input type="checkbox" data-trans-key="${mode.transKey}"
+                 ${isGlass ? 'checked' : ''}>
+          <span class="ios-toggle-track"></span>
+        </label>`;
+      group.appendChild(glassRow);
+
+      // Colour cards row
+      const gridRow = document.createElement('div');
+      gridRow.className = 'colour-grid';
+      gridRow.id = `grid-${mode.id}`;
+      if (isGlass) gridRow.style.opacity = '0.38';
+      gridRow.style.transition = 'opacity 0.22s';
+
+      gridRow.appendChild(this._makeColourCard(mode.startKey, 'Start', 'Gradient start colour', mode.startDef));
+      gridRow.appendChild(this._makeColourCard(mode.endKey,   'End',   'Gradient end colour',   mode.endDef));
+      group.appendChild(gridRow);
+      groupWrap.appendChild(group);
+      modeContainer.appendChild(groupWrap);
+
+      // Wire glass toggle
+      const glassInput = glassRow.querySelector('input[type=checkbox]');
+      const badge      = labelRow.querySelector('.glass-badge');
+      glassInput.addEventListener('change', () => {
+        const on = glassInput.checked;
+        gridRow.style.opacity = on ? '0.38' : '1';
+        gridRow.style.pointerEvents = on ? 'none' : '';
+        badge.classList.toggle('visible', on);
+        this._update(mode.transKey, on);
+      });
+    }
+
+    // ── Build text colour grid ────────────────────────────────────
+    const textGrid = this.shadowRoot.getElementById('text-grid');
+    for (const f of TEXT_FIELDS) textGrid.appendChild(this._makeColourCard(f.key, f.label, f.desc, f.def));
+
+    // ── Build icon/button colour grid ─────────────────────────────
+    const iconGrid = this.shadowRoot.getElementById('icon-grid');
+    for (const f of ICON_FIELDS) iconGrid.appendChild(this._makeColourCard(f.key, f.label, f.desc, f.def));
+
+    this._bindStaticEvents();
+    this._syncUI();
   }
 
-  // ── Event wiring ───────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────
+  //  Build a single colour card
+  // ─────────────────────────────────────────────────────────────────
+  _makeColourCard(key, label, desc, defaultVal) {
+    const saved     = this._config[key] || '';
+    const swatch    = saved || defaultVal;
 
-  _bindEvents() {
+    const card = document.createElement('div');
+    card.className   = 'colour-card';
+    card.dataset.key = key;
+    card.innerHTML = `
+      <label class="colour-swatch">
+        <div class="colour-swatch-preview" style="background:${swatch}"></div>
+        <input type="color" value="${swatch}">
+      </label>
+      <div class="colour-info">
+        <div class="colour-label">${label}</div>
+        <div class="colour-desc">${desc}</div>
+        <div class="colour-hex-row">
+          <div class="colour-dot" style="background:${swatch}"></div>
+          <input class="colour-hex" type="text" value="${saved}"
+                 maxlength="7" placeholder="${defaultVal}" spellcheck="false">
+          <span class="colour-edit-icon">✎</span>
+        </div>
+      </div>`;
+
+    const picker   = card.querySelector('input[type=color]');
+    const hexInput = card.querySelector('.colour-hex');
+    const preview  = card.querySelector('.colour-swatch-preview');
+    const dot      = card.querySelector('.colour-dot');
+
+    const apply = (val) => {
+      preview.style.background = val;
+      dot.style.background     = val;
+      if (/^#[0-9a-fA-F]{6}$/.test(val)) picker.value = val;
+      hexInput.value           = val;
+      this._update(key, val);
+    };
+
+    picker.addEventListener('input',  () => apply(picker.value));
+    picker.addEventListener('change', () => apply(picker.value));
+    hexInput.addEventListener('input', () => {
+      const v = hexInput.value.trim();
+      if (/^#[0-9a-fA-F]{6}$/.test(v)) apply(v);
+    });
+    hexInput.addEventListener('blur', () => {
+      const cur = this._config[key] || defaultVal;
+      if (!/^#[0-9a-fA-F]{6}$/.test(hexInput.value.trim())) hexInput.value = cur;
+    });
+    hexInput.addEventListener('keydown', e => { if (e.key === 'Enter') hexInput.blur(); });
+
+    return card;
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  //  Sync UI from config (no events fired)
+  // ─────────────────────────────────────────────────────────────────
+  _syncUI() {
+    if (!this._initialized) return;
+    const root = this.shadowRoot;
+
+    // Colour cards
+    root.querySelectorAll('.colour-card').forEach(card => {
+      const key   = card.dataset.key;
+      const saved = this._config[key] || '';
+      const def   = card.querySelector('.colour-hex').placeholder;
+      const sw    = saved || def;
+      card.querySelector('.colour-swatch-preview').style.background = sw;
+      card.querySelector('.colour-dot').style.background            = sw;
+      const p = card.querySelector('input[type=color]');
+      if (/^#[0-9a-fA-F]{6}$/.test(sw)) p.value = sw;
+      card.querySelector('.colour-hex').value = saved;
+    });
+
+    // Glass toggles + grid opacity
+    root.querySelectorAll('[data-trans-key]').forEach(input => {
+      const on = !!this._config[input.dataset.transKey];
+      input.checked = on;
+      const modeId = input.dataset.transKey.replace('_transparent','');
+      const grid   = root.getElementById(`grid-${modeId}`);
+      if (grid) { grid.style.opacity = on ? '0.38' : '1'; grid.style.pointerEvents = on ? 'none' : ''; }
+      const badge  = root.getElementById(`badge-${modeId}`);
+      if (badge) badge.classList.toggle('visible', on);
+    });
+
+    // Static inputs
+    const es = root.getElementById('entity-select');
+    if (es) es.value = this._config.entity || '';
+    const ni = root.getElementById('name-input');
+    if (ni) ni.value = this._config.name || '';
+    const sc = root.getElementById('show-controls-toggle');
+    if (sc) sc.checked = this._config.show_controls !== false;
+    const to = root.getElementById('turn-on-mode-select');
+    if (to) to.value = this._config.turn_on_mode || 'auto';
+
+    // Icon selects
+    root.querySelectorAll('[data-key]').forEach(el => {
+      if (el.tagName === 'SELECT') el.value = this._config[el.dataset.key] || '';
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  //  Static event wiring
+  // ─────────────────────────────────────────────────────────────────
+  _bindStaticEvents() {
+    const root = this.shadowRoot;
+
     // Tab switching
-    this.querySelectorAll('.tab').forEach(tab => {
+    root.querySelectorAll('.tab-pill').forEach(tab => {
       tab.addEventListener('click', () => {
-        this.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-        this.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+        root.querySelectorAll('.tab-pill').forEach(t => t.classList.remove('active'));
+        root.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
         tab.classList.add('active');
-        this.querySelector(`#panel-${tab.dataset.tab}`).classList.add('active');
+        root.querySelector(`#panel-${tab.dataset.tab}`).classList.add('active');
       });
     });
 
-    // Static named inputs
-    this.querySelector('#entity-select')
+    root.getElementById('entity-select')
       .addEventListener('change', ev => this._update('entity', ev.target.value));
-    this.querySelector('#name-input')
+    root.getElementById('name-input')
       .addEventListener('input',  ev => this._update('name',   ev.target.value));
-
-    // Show controls toggle
-    this.querySelector('#show-controls-toggle')
+    root.getElementById('show-controls-toggle')
       .addEventListener('change', ev => this._update('show_controls', ev.target.checked));
-
-    this.querySelector('#bg-transparent-toggle')
-      .addEventListener('change', ev => this._update('bg_transparent', ev.target.checked));
-
-    // Turn-on mode select
-    this.querySelector('#turn-on-mode-select')
+    root.getElementById('turn-on-mode-select')
       .addEventListener('change', ev => this._update('turn_on_mode', ev.target.value));
 
-    // All data-key inputs (colours + icon selects)
-    this.querySelectorAll('[data-key]').forEach(el => {
-      const key = el.dataset.key;
-      const evt = el.type === 'color' ? 'input' : 'change';
-
-      el.addEventListener(evt, ev => {
-        const val = ev.target.value;
-        this._update(key, val);
-
-        // Update hex label + colour dot for single-colour rows
-        const hexEl = this.querySelector(`#hex-${key}`);
-        if (hexEl) hexEl.textContent = val.toUpperCase();
-        const dotEl = hexEl && hexEl.closest('.color-right')
-          ? hexEl.closest('.color-right').querySelector('.color-dot')
-          : null;
-        if (dotEl) dotEl.style.background = val;
-
-        // Update gradient preview bar when either swatch changes
-        const isStart = key.endsWith('_start');
-        const isEnd   = key.endsWith('_end');
-        if (isStart || isEnd) {
-          const base    = key.replace(/_start$|_end$/, '');
-          const startEl = this.querySelector(`[data-key="${base}_start"]`);
-          const endEl   = this.querySelector(`[data-key="${base}_end"]`);
-          const preview = this.querySelector(`#gp-${base}_start`);
-          if (startEl && endEl && preview) {
-            preview.style.background =
-              `linear-gradient(90deg,${startEl.value},${endEl.value})`;
-          }
-        }
-      });
+    // Icon selects
+    root.querySelectorAll('[data-key]').forEach(el => {
+      if (el.tagName === 'SELECT') {
+        el.addEventListener('change', ev => this._update(el.dataset.key, ev.target.value));
+      }
     });
   }
 
-  // ── Config dispatch ────────────────────────────────────────────────
-
+  // ─────────────────────────────────────────────────────────────────
+  //  Config dispatch
+  // ─────────────────────────────────────────────────────────────────
   _update(key, value) {
     this._config = { ...this._config, [key]: value };
     this.dispatchEvent(new CustomEvent('config-changed', {
-      detail: { config: this._config },
-      bubbles: true,
-      composed: true,
+      detail: { config: this._config }, bubbles: true, composed: true,
     }));
   }
 }
